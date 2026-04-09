@@ -1,0 +1,3467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<title>RP Group Chat</title>
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* color */
+  --bg:            #FFFFFF;
+  --bg-elevated:   #F2F2F7;
+  --bg-grouped:    #F2F2F7;
+  --bg-chat:       #FFFFFF;
+  --bubble-in:     #E9E9EB;
+  --bubble-in-fg:  #000000;
+  --bubble-out:    #007AFF;
+  --bubble-out-fg: #FFFFFF;
+  --text:          #000000;
+  --text-2:        #3C3C43;
+  --text-3:        rgba(60,60,67,0.60);
+  --text-4:        rgba(60,60,67,0.30);
+  --separator:     rgba(60,60,67,0.12);
+  --separator-opaque: #D1D1D6;
+  --accent:        #007AFF;
+  --accent-hover:  #006FE6;
+  --danger:        #FF3B30;
+  --success:       #34C759;
+  --warn:          #FF9500;
+
+  /* geometry */
+  --radius-bubble: 20px;
+  --radius-card:   12px;
+  --radius-input:  22px;
+
+  /* motion */
+  --ease-ios:  cubic-bezier(.32,.72,0,1);
+  --dur-fast:  .18s;
+  --dur-base:  .28s;
+  --dur-slow:  .42s;
+
+  /* font */
+  --font-sans: "Inter var", "Inter", "PingFang SC", "Noto Sans SC",
+               -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+
+  --topbar-h: 56px;
+  --chat-max: 720px;
+}
+
+@supports (font-variation-settings: normal) {
+  :root { --font-sans: "Inter var", "PingFang SC", "Noto Sans SC",
+                      -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 420;
+  font-variation-settings: "wght" 420;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+button, input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--text-4); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ===== Top Bar ===== */
+#topbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  height: var(--topbar-h);
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--separator);
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+#topbar .left,
+#topbar .right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+#topbar .right { justify-content: flex-end; }
+
+#topbar .center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  max-width: 55%;
+}
+
+#room-label {
+  font-size: 15px;
+  font-weight: 600;
+  font-variation-settings: "wght" 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  line-height: 1.15;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 1px;
+  font-weight: 450;
+  font-variation-settings: "wght" 450;
+}
+#connection-status::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-4);
+}
+#connection-status.connected::before { background: var(--success); }
+#connection-status.disconnected::before { background: var(--danger); }
+
+.topbar-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) var(--ease-ios),
+              transform var(--dur-fast) var(--ease-ios);
+}
+.topbar-btn:hover { background: var(--bg-elevated); }
+.topbar-btn:active { transform: scale(0.92); }
+.topbar-btn.active { background: var(--bg-elevated); }
+.topbar-btn svg { display: block; width: 22px; height: 22px; }
+
+/* ===== Main ===== */
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+  transition: transform var(--dur-base) var(--ease-ios),
+              border-radius var(--dur-base) var(--ease-ios);
+  transform-origin: center top;
+}
+
+body.sheet-open #main {
+  transform: scale(0.96);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* ===== Chat Area ===== */
+#chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-chat);
+  position: relative;
+}
+
+#messages {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+}
+
+#messages-inner {
+  width: 100%;
+  max-width: var(--chat-max);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 8px;
+}
+
+/* ===== Date separator ===== */
+.date-sep {
+  align-self: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-variation-settings: "wght" 600;
+  color: var(--text-3);
+  padding: 18px 10px 10px;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+/* ===== Message Row ===== */
+.msg-row {
+  display: flex;
+  flex-direction: column;
+  max-width: min(76%, 520px);
+  margin-top: 2px;
+}
+.msg-row.group-start,
+.msg-row.group-solo { margin-top: 10px; }
+.msg-row:first-child { margin-top: 6px; }
+
+.msg-row.incoming { align-self: flex-start; flex-direction: row; align-items: flex-end; }
+.msg-row.outgoing { align-self: flex-end; align-items: flex-end; }
+
+/* Sender label */
+.msg-sender {
+  font-size: 11px;
+  font-weight: 550;
+  font-variation-settings: "wght" 550;
+  color: var(--text-3);
+  padding: 0 14px 3px;
+  display: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-row.incoming.group-start .msg-sender,
+.msg-row.incoming.group-solo .msg-sender { display: block; }
+
+/* Bubble */
+.bubble {
+  position: relative;
+  padding: 8px 14px;
+  border-radius: var(--radius-bubble);
+  line-height: 1.35;
+  font-size: 15px;
+  font-weight: 420;
+  font-variation-settings: "wght" 420;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  cursor: pointer;
+}
+.msg-row.incoming .bubble { background: var(--bubble-in); color: var(--bubble-in-fg); }
+.msg-row.outgoing .bubble { background: var(--bubble-out); color: var(--bubble-out-fg); }
+
+/* Tail on group-end / group-solo */
+.msg-row.incoming.group-end .bubble,
+.msg-row.incoming.group-solo .bubble { border-bottom-left-radius: 6px; }
+.msg-row.incoming.group-end .bubble::before,
+.msg-row.incoming.group-solo .bubble::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  bottom: 0;
+  left: -7px;
+  width: 18px;
+  height: 20px;
+  background: var(--bubble-in);
+  border-bottom-right-radius: 16px 14px;
+}
+.msg-row.incoming.group-end .bubble::after,
+.msg-row.incoming.group-solo .bubble::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  bottom: 0;
+  left: -18px;
+  width: 18px;
+  height: 20px;
+  background: var(--bg-chat);
+  border-bottom-right-radius: 14px;
+}
+.msg-row.outgoing.group-end .bubble,
+.msg-row.outgoing.group-solo .bubble { border-bottom-right-radius: 6px; }
+.msg-row.outgoing.group-end .bubble::before,
+.msg-row.outgoing.group-solo .bubble::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  bottom: 0;
+  right: -7px;
+  width: 18px;
+  height: 20px;
+  background: var(--bubble-out);
+  border-bottom-left-radius: 16px 14px;
+}
+.msg-row.outgoing.group-end .bubble::after,
+.msg-row.outgoing.group-solo .bubble::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  bottom: 0;
+  right: -18px;
+  width: 18px;
+  height: 20px;
+  background: var(--bg-chat);
+  border-bottom-left-radius: 14px;
+}
+.bubble > * { position: relative; z-index: 2; }
+
+.msg-body { white-space: pre-wrap; }
+.msg-body strong { font-weight: 650; font-variation-settings: "wght" 650; }
+.msg-body em { font-style: italic; }
+
+/* Edited indicator */
+.msg-edited {
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--text-3);
+  padding: 2px 14px 0;
+  font-style: italic;
+}
+
+/* ===== Avatar slot (incoming messages) ===== */
+.msg-avatar-slot {
+  width: 28px;
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-right: 6px;
+  padding-bottom: 2px;
+  position: relative;
+  z-index: 2; /* sit above bubble ::after tail carve-out */
+}
+.msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 650;
+  font-variation-settings: "wght" 650;
+  color: #fff;
+  flex-shrink: 0;
+  visibility: hidden; /* shown only on group-end / group-solo */
+}
+.msg-row.incoming.group-end .msg-avatar,
+.msg-row.incoming.group-solo .msg-avatar { visibility: visible; }
+/* When the last bubble in a group is edited, keep the avatar aligned to the
+   bubble bottom rather than the .msg-edited line below it. 16px = edited
+   line-height (14) + top padding (2). */
+.msg-row.incoming:has(.msg-edited) .msg-avatar { margin-bottom: 16px; }
+
+/* Content wrapper inside incoming rows */
+.msg-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Reply quote inside bubble */
+.bubble .msg-reply-quote {
+  padding: 4px 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  border-left: 2px solid currentColor;
+  opacity: 0.85;
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+.msg-row.outgoing .bubble .msg-reply-quote {
+  background: rgba(255,255,255,0.14);
+  border-left-color: rgba(255,255,255,0.7);
+}
+.msg-row.incoming .bubble .msg-reply-quote {
+  background: rgba(0,0,0,0.05);
+  border-left-color: rgba(0,0,0,0.35);
+}
+.bubble .msg-reply-quote .reply-quote-sender {
+  font-weight: 600;
+  font-variation-settings: "wght" 600;
+  display: inline;
+}
+
+/* ===== Scroll-to-bottom FAB ===== */
+#scroll-bottom {
+  position: absolute;
+  top: -48px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--separator);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  cursor: pointer;
+  color: var(--text-2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.9);
+  transition: opacity var(--dur-fast) var(--ease-ios),
+              transform var(--dur-fast) var(--ease-ios);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+#scroll-bottom.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+#scroll-bottom:active { transform: scale(0.9); }
+#scroll-bottom svg { width: 18px; height: 18px; display: block; }
+
+/* ===== Toast layer ===== */
+#toast-layer {
+  position: fixed;
+  top: calc(var(--topbar-h) + 8px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 2000;
+}
+.toast {
+  pointer-events: auto;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  font-variation-settings: "wght" 500;
+  color: var(--text);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.10);
+  max-width: 88%;
+  animation: toast-in .3s var(--ease-ios);
+}
+.toast.error { color: var(--danger); }
+.toast.leaving { animation: toast-out .25s var(--ease-ios) forwards; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px) scale(.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: translateY(-8px) scale(.96); }
+}
+
+/* ===== Input Area ===== */
+#input-area {
+  position: relative;
+  padding: 8px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-top: 1px solid var(--separator);
+  flex-shrink: 0;
+}
+
+#input-area-inner {
+  max-width: var(--chat-max);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#reply-bar {
+  display: none;
+  padding: 8px 34px 8px 14px;
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text-2);
+  position: relative;
+  line-height: 1.4;
+  max-height: 60px;
+  overflow: hidden;
+  animation: reply-in .2s var(--ease-ios);
+}
+#reply-bar::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 2.5px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+#reply-bar.active { display: block; }
+@keyframes reply-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#reply-bar .reply-sender {
+  font-weight: 600;
+  font-variation-settings: "wght" 600;
+  color: var(--accent);
+  display: block;
+  padding-left: 6px;
+  font-size: 11px;
+}
+#reply-bar .reply-text {
+  display: block;
+  padding-left: 6px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#reply-bar .reply-close {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--text-4);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+#btn-more {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-elevated);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) var(--ease-ios),
+              transform var(--dur-fast) var(--ease-ios);
+}
+#btn-more:hover { background: #E5E5EA; }
+#btn-more:active { transform: scale(0.88); }
+#btn-more svg { width: 18px; height: 18px; display: block; }
+#btn-more.active svg { transform: rotate(45deg); transition: transform var(--dur-base) var(--ease-ios); }
+
+#msg-input {
+  flex: 1;
+  background: var(--bg-elevated);
+  border: 1px solid transparent;
+  border-radius: var(--radius-input);
+  color: var(--text);
+  padding: 9px 14px;
+  font-size: 15px;
+  line-height: 1.35;
+  resize: none;
+  min-height: 36px;
+  max-height: 140px;
+  outline: none;
+  transition: background var(--dur-fast) var(--ease-ios),
+              border-color var(--dur-fast) var(--ease-ios);
+}
+#msg-input:focus { background: var(--bg); border-color: var(--separator); }
+#msg-input::placeholder { color: var(--text-3); }
+
+#btn-send {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(60,60,67,0.44);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) var(--ease-ios),
+              transform var(--dur-fast) var(--ease-ios);
+}
+#btn-send.has-text { background: var(--accent); }
+#btn-send:active { transform: scale(0.88); }
+#btn-send.loading { background: var(--danger); }
+#btn-send.loading:active { transform: scale(0.88); }
+#btn-send svg { width: 18px; height: 18px; display: block; }
+
+/* ===== Settings Sheet ===== */
+#sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease-ios);
+  z-index: 100;
+}
+#sheet-backdrop.active { opacity: 1; pointer-events: auto; }
+
+.sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 440px;
+  max-width: 100vw;
+  background: var(--bg-grouped);
+  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform var(--dur-slow) var(--ease-ios);
+  box-shadow: -8px 0 40px rgba(0,0,0,0.12);
+}
+.sheet.open { transform: translateX(0); }
+
+.sheet-grabber {
+  display: none;
+  width: 36px;
+  height: 5px;
+  border-radius: 2.5px;
+  background: var(--text-4);
+  margin: 8px auto 0;
+  flex-shrink: 0;
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 12px;
+  flex-shrink: 0;
+  background: var(--bg-grouped);
+  border-bottom: 1px solid var(--separator);
+  position: relative;
+  z-index: 1;
+}
+
+.segmented {
+  display: flex;
+  background: rgba(120,120,128,0.14);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
+  flex: 1;
+}
+.seg-btn {
+  flex: 1;
+  padding: 7px 10px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 520;
+  font-variation-settings: "wght" 520;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-ios),
+              font-variation-settings var(--dur-fast) var(--ease-ios),
+              box-shadow var(--dur-fast) var(--ease-ios);
+}
+.seg-btn.active {
+  background: var(--bg);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+  font-variation-settings: "wght" 620;
+}
+.seg-btn:active { transform: scale(0.97); }
+
+.sheet-close {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(120,120,128,0.14);
+  border: none;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast), transform var(--dur-fast);
+}
+.sheet-close:hover { background: rgba(120,120,128,0.22); }
+.sheet-close:active { transform: scale(0.9); }
+
+.sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 16px max(28px, env(safe-area-inset-bottom));
+  background: var(--bg-grouped);
+}
+
+.sheet-panel {
+  display: none;
+  flex-direction: column;
+  gap: 18px;
+}
+.sheet-panel.active { display: flex; }
+
+/* Section label above ios-group */
+.section-label {
+  font-size: 11px;
+  font-weight: 500;
+  font-variation-settings: "wght" 500;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 16px;
+  margin-bottom: -12px;
+}
+
+/* iOS grouped inset list */
+.ios-group {
+  background: var(--bg);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+.ios-group > div {
+  padding: 10px 16px;
+  border-bottom: 0.5px solid var(--separator);
+}
+.ios-group > div:last-child { border-bottom: none; }
+
+.ios-group .field-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-3);
+  margin-bottom: 2px;
+  padding: 0;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+  font-variation-settings: "wght" 500;
+  text-transform: none;
+}
+.ios-group .field-input,
+.ios-group .field-textarea {
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+  font-size: 15px;
+  border-radius: 0;
+  width: 100%;
+  color: var(--text);
+  outline: none;
+}
+.ios-group .field-input:focus,
+.ios-group .field-textarea:focus {
+  border: none;
+  outline: none;
+}
+.ios-group .field-input::placeholder,
+.ios-group .field-textarea::placeholder { color: var(--text-4); }
+.ios-group .field-textarea { resize: vertical; min-height: 52px; line-height: 1.42; }
+.ios-group .field-textarea.tall { min-height: 96px; }
+
+/* Inline loader button inside row */
+.inline-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.btn-mini {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  background: var(--bg-elevated);
+  color: var(--accent);
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 550;
+  font-variation-settings: "wght" 550;
+  cursor: pointer;
+  transition: background var(--dur-fast), transform var(--dur-fast);
+}
+.btn-mini:hover { background: #E5E5EA; }
+.btn-mini:active { transform: scale(0.95); }
+.btn-mini.loading { opacity: 0.55; pointer-events: none; }
+
+/* Danger row button (inside ios-group) */
+.btn-danger-row {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 15px;
+  width: 100%;
+  padding: 2px 0;
+  text-align: center;
+  cursor: pointer;
+  font-weight: 500;
+  font-variation-settings: "wght" 500;
+}
+
+/* Primary action buttons in sheet (below groups) */
+.btn {
+  padding: 12px 16px;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 550;
+  font-variation-settings: "wght" 550;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-ios),
+              transform var(--dur-fast) var(--ease-ios),
+              font-variation-settings var(--dur-fast) var(--ease-ios),
+              color var(--dur-fast) var(--ease-ios);
+}
+.btn:active { transform: scale(0.97); }
+.btn:hover { font-variation-settings: "wght" 620; }
+
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); }
+
+.btn-secondary {
+  background: var(--bg);
+  color: var(--accent);
+  border: 1px solid var(--separator);
+}
+.btn-secondary:hover { background: var(--bg-elevated); }
+
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-row .btn { flex: 1; min-width: 0; text-align: center; }
+
+.btn.loading { opacity: 0.55; pointer-events: none; }
+
+/* ===== More sheet ("+" drawer) ===== */
+#more-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease-ios);
+  z-index: 180;
+}
+#more-sheet-backdrop.active { opacity: 1; pointer-events: auto; }
+
+#more-sheet {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translate(-50%, calc(100% + 20px));
+  width: min(500px, calc(100% - 20px));
+  padding: 0 0 max(10px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform var(--dur-base) var(--ease-ios);
+  z-index: 190;
+  pointer-events: none;
+}
+#more-sheet.active {
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.action-group,
+.action-cancel-wrap {
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.action-btn {
+  display: block;
+  width: 100%;
+  padding: 16px;
+  background: none;
+  border: none;
+  font-size: 17px;
+  font-weight: 500;
+  font-variation-settings: "wght" 500;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: center;
+  transition: background var(--dur-fast);
+}
+.action-btn + .action-btn { border-top: 0.5px solid var(--separator); }
+.action-btn:active { background: rgba(0,0,0,0.06); }
+.action-btn.cancel {
+  font-weight: 600;
+  font-variation-settings: "wght" 600;
+}
+.action-btn.loading { opacity: 0.55; pointer-events: none; }
+
+/* ===== Context Menu (new: focused with blur backdrop) ===== */
+.ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.18);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  z-index: 1199;
+  animation: ctx-back-in .25s var(--ease-ios);
+}
+@keyframes ctx-back-in {
+  from { opacity: 0; backdrop-filter: blur(0) saturate(100%); -webkit-backdrop-filter: blur(0) saturate(100%); }
+  to   { opacity: 1; }
+}
+
+.msg-row.ctx-lifted {
+  position: relative;
+  z-index: 1205;
+  transform: scale(1.03);
+  transition: transform var(--dur-base) var(--ease-ios);
+}
+/* While lifted over the blur backdrop, hide the bubble tail. The tail's
+   eraser pseudo is painted in --bg-chat (opaque) and would otherwise show as
+   a white notch over the frosted backdrop. Restore the squared-off corner
+   to a normal radius so the tailless bubble looks intentional. */
+.msg-row.ctx-lifted .bubble::before,
+.msg-row.ctx-lifted .bubble::after { display: none; }
+.msg-row.ctx-lifted.incoming .bubble { border-bottom-left-radius: var(--radius-bubble); }
+.msg-row.ctx-lifted.outgoing .bubble { border-bottom-right-radius: var(--radius-bubble); }
+
+.ctx-menu {
+  position: fixed;
+  z-index: 1210;
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.18);
+  min-width: 180px;
+  padding: 4px 0;
+  animation: ctx-menu-in .2s var(--ease-ios);
+  overflow: hidden;
+}
+@keyframes ctx-menu-in {
+  from { opacity: 0; transform: scale(.92) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 16px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 450;
+  font-variation-settings: "wght" 450;
+  text-align: left;
+  cursor: pointer;
+}
+.ctx-menu-item:active { background: rgba(0,0,0,0.06); }
+.ctx-menu-item.danger { color: var(--danger); }
+.ctx-menu-sep { height: 0.5px; background: var(--separator); margin: 0; }
+
+/* ===== Inline Edit Mode ===== */
+.bubble .msg-edit-area {
+  width: 100%;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 8px;
+  color: inherit;
+  padding: 6px 10px;
+  font-size: 15px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 48px;
+  outline: none;
+  line-height: 1.4;
+}
+.msg-row.outgoing .bubble .msg-edit-area {
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.45);
+  color: #fff;
+}
+.bubble .msg-edit-buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  justify-content: flex-end;
+}
+.bubble .msg-edit-buttons .btn {
+  padding: 5px 14px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.msg-row.outgoing .bubble .msg-edit-buttons .btn-secondary {
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+  border-color: rgba(255,255,255,0.3);
+}
+
+/* Hidden file input */
+#import-file-input { display: none; }
+
+/* ===== Avatar URL preview in settings ===== */
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.avatar-row .field-input { flex: 1; min-width: 0; }
+.avatar-preview-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--separator);
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatar-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: none;
+}
+.avatar-preview-wrap.has-image .avatar-preview-img { display: block; }
+.avatar-preview-fallback {
+  font-size: 13px;
+  font-weight: 650;
+  font-variation-settings: "wght" 650;
+  color: #fff;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ===== Phase C: Micro-animations ===== */
+
+/* Message entry spring */
+.msg-row { transform-origin: bottom left; }
+.msg-row.outgoing { transform-origin: bottom right; }
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.94); }
+  60%  { transform: translateY(-2px) scale(1.01); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes msg-in-out {
+  from { opacity: 0; transform: translateY(10px) scale(0.94); }
+  52%  { transform: translateY(-5px) scale(1.04); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.msg-row.msg-new { animation: msg-in var(--dur-slow) var(--ease-ios) both; }
+.msg-row.msg-new.outgoing { animation: msg-in-out var(--dur-slow) var(--ease-ios) both; }
+
+/* Typing indicator (3 bounce dots) */
+.msg-typing .msg-body {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  white-space: normal;
+  padding: 2px 0;
+}
+.typing-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex-shrink: 0;
+  animation: typing-bounce .9s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: .15s; }
+.typing-dot:nth-child(3) { animation-delay: .30s; }
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: scale(0.72); opacity: 0.4; }
+  40%           { transform: scale(1.0);  opacity: 1; }
+}
+
+/* Connection dot pulse */
+@keyframes conn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52,199,89,0.5); }
+  50%       { box-shadow: 0 0 0 5px rgba(52,199,89,0); }
+}
+#connection-status.connected::before {
+  animation: conn-pulse 2.5s ease-in-out infinite;
+}
+
+/* Message delete collapse */
+@keyframes msg-collapse {
+  from { opacity: 1; transform: scale(1);          max-height: 300px; }
+  to   { opacity: 0; transform: scale(0.9) translateY(4px); max-height: 0; }
+}
+.msg-row.collapsing {
+  overflow: hidden;
+  pointer-events: none;
+  animation: msg-collapse .28s var(--ease-ios) forwards;
+}
+
+/* Send button flash ring */
+@keyframes send-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(0,122,255,0.50); }
+  55%  { box-shadow: 0 0 0 8px rgba(0,122,255,0); transform: scale(1.14); }
+  100% { box-shadow: none; transform: scale(1); }
+}
+#btn-send.send-flash { animation: send-flash .38s var(--ease-ios); }
+
+/* ===== Quote-jump highlight ===== */
+.msg-row.quote-lifted {
+  position: relative;
+  z-index: 1205;
+  transform: scale(1.03);
+  transition: transform var(--dur-base) var(--ease-ios);
+}
+.msg-row.quote-lifted.shrink-back {
+  transform: scale(1);
+  transition: transform var(--dur-slow) var(--ease-ios);
+}
+.msg-row.quote-lifted .bubble::before,
+.msg-row.quote-lifted .bubble::after { display: none; }
+.msg-row.quote-lifted.incoming .bubble { border-bottom-left-radius: var(--radius-bubble); }
+.msg-row.quote-lifted.outgoing .bubble { border-bottom-right-radius: var(--radius-bubble); }
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .msg-row { max-width: 82%; }
+
+  .sheet {
+    width: 100%;
+    top: auto;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    height: 92vh;
+    max-height: 92vh;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+    transform: translateY(100%);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.18);
+  }
+  .sheet.open { transform: translateY(0); }
+  .sheet-grabber { display: block; }
+  .sheet-header { padding-top: 10px; }
+
+  body.sheet-open #main {
+    transform: scale(0.94) translateY(-4px);
+    border-radius: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>
+
+<!-- Firebase compat CDN -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<!-- ===== Top Bar ===== -->
+<div id="topbar">
+  <div class="left"></div>
+  <div class="center">
+    <span id="room-label">RP Group Chat</span>
+    <span id="connection-status">未连接</span>
+  </div>
+  <div class="right">
+    <button class="topbar-btn" data-sheet="sheet-settings" data-subtab="panel-config" aria-label="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <button class="topbar-btn" data-sheet="sheet-persona" data-subtab="panel-char1" aria-label="角色">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </button>
+    <button class="topbar-btn" data-sheet="sheet-group" aria-label="群聊">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ===== Main ===== -->
+<div id="main">
+  <div id="chat-area">
+    <div id="messages">
+      <div id="messages-inner"></div>
+    </div>
+    <div id="input-area">
+      <button id="scroll-bottom" aria-label="滚动到底部">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+      </button>
+      <div id="input-area-inner">
+        <div id="reply-bar">
+          <span class="reply-sender"></span>
+          <span class="reply-text"></span>
+          <button class="reply-close" aria-label="取消回复">&times;</button>
+        </div>
+        <div id="input-row">
+          <button id="btn-more" aria-label="更多">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <textarea id="msg-input" placeholder="iMessage" rows="1"></textarea>
+          <button id="btn-send" aria-label="发送">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /main -->
+
+<!-- ===== Shared Sheet Backdrop ===== -->
+<div id="sheet-backdrop"></div>
+
+<!-- ===== Sheet: 设置 ===== -->
+<div id="sheet-settings" class="sheet" role="dialog" aria-modal="true">
+  <div class="sheet-grabber"></div>
+  <div class="sheet-header">
+    <div class="segmented" role="tablist">
+      <button class="seg-btn active" data-tab="panel-config">配置</button>
+      <button class="seg-btn" data-tab="panel-chat-history">聊天记录</button>
+    </div>
+    <button class="sheet-close" aria-label="关闭">&times;</button>
+  </div>
+  <div class="sheet-body">
+
+    <!-- Panel: 配置 -->
+    <div class="sheet-panel active" id="panel-config">
+      <div class="section-label">基础配置</div>
+      <div class="ios-group">
+        <div>
+          <label class="field-label">房间 ID</label>
+          <input type="text" class="field-input" id="cfg-roomId" placeholder="两人填相同的房间ID">
+        </div>
+        <div>
+          <label class="field-label">API Base URL</label>
+          <input type="text" class="field-input" id="cfg-apiBaseUrl" placeholder="https://api.openai.com/v1">
+        </div>
+        <div>
+          <label class="field-label">API Key</label>
+          <input type="password" class="field-input" id="cfg-apiKey" placeholder="sk-xxx">
+        </div>
+        <div>
+          <label class="field-label">模型名称</label>
+          <div class="inline-row">
+            <input type="text" class="field-input" id="cfg-modelName" placeholder="gpt-4o" style="flex:1;">
+            <button class="btn-mini" id="btn-fetch-models" title="从 API 加载模型列表">加载</button>
+          </div>
+          <select class="field-input" id="cfg-modelSelect" style="display:none;margin-top:6px;">
+            <option value="">-- 选择模型 --</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section-label">副 API（摘要等辅助功能）</div>
+      <div class="ios-group">
+        <div>
+          <label class="field-label">副 API Base URL</label>
+          <input type="text" class="field-input" id="cfg-subApiBaseUrl" placeholder="留空则使用主 API">
+        </div>
+        <div>
+          <label class="field-label">副 API Key</label>
+          <input type="password" class="field-input" id="cfg-subApiKey" placeholder="留空则使用主 API Key">
+        </div>
+        <div>
+          <label class="field-label">副 API 模型名称</label>
+          <div class="inline-row">
+            <input type="text" class="field-input" id="cfg-subModelName" placeholder="留空则使用主模型" style="flex:1;">
+            <button class="btn-mini" id="btn-fetch-sub-models" title="从副 API 加载模型列表">加载</button>
+          </div>
+          <select class="field-input" id="cfg-subModelSelect" style="display:none;margin-top:6px;">
+            <option value="">-- 选择模型 --</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section-label">Firebase 配置</div>
+      <div class="ios-group">
+        <div>
+          <label class="field-label">Firebase API Key</label>
+          <input type="text" class="field-input" id="cfg-firebaseApiKey" placeholder="AIzaSy...">
+        </div>
+        <div>
+          <label class="field-label">Database URL</label>
+          <input type="text" class="field-input" id="cfg-databaseURL" placeholder="https://xxx-default-rtdb.firebaseio.com">
+        </div>
+        <div>
+          <label class="field-label">Project ID</label>
+          <input type="text" class="field-input" id="cfg-projectId" placeholder="your-project-id">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-save">保存设置</button>
+        <button class="btn btn-secondary" id="btn-load">加载设置</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" id="btn-export">导出设置</button>
+        <button class="btn btn-secondary" id="btn-import">导入设置</button>
+      </div>
+    </div>
+
+    <!-- Panel: 聊天记录 -->
+    <div class="sheet-panel" id="panel-chat-history">
+      <div class="section-label">群总提示词</div>
+      <div class="ios-group">
+        <div>
+          <label class="field-label">写给所有 AI 角色看的背景说明</label>
+          <textarea class="field-textarea tall" id="cfg-groupPrompt" placeholder="这是一个用来 xxx 的群，里面的人…"></textarea>
+        </div>
+      </div>
+
+      <div class="section-label">上下文</div>
+      <div class="ios-group">
+        <div>
+          <label class="field-label">上下文消息条数</label>
+          <input type="number" class="field-input" id="cfg-contextMessageCount" placeholder="100" min="1">
+        </div>
+        <div>
+          <label class="field-label">前文记忆摘要</label>
+          <textarea class="field-textarea tall" id="cfg-memorySummary" placeholder="之前剧情的摘要..."></textarea>
+        </div>
+        <div>
+          <label class="field-label">摘要生成提示词</label>
+          <textarea class="field-textarea tall" id="cfg-summaryPrompt" placeholder="自定义摘要提示词（留空使用默认）"></textarea>
+        </div>
+      </div>
+
+      <button class="btn btn-secondary" id="btn-generate-summary">AI 生成摘要</button>
+
+      <div class="section-label">危险操作</div>
+      <div class="ios-group">
+        <div>
+          <button class="btn-danger-row" id="btn-clear-chat">清除全部聊天记录</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /sheet-body -->
+</div><!-- /sheet-settings -->
+
+<!-- ===== Sheet: Persona ===== -->
+<div id="sheet-persona" class="sheet" role="dialog" aria-modal="true">
+  <div class="sheet-grabber"></div>
+  <div class="sheet-header">
+    <div class="segmented" role="tablist">
+      <button class="seg-btn active" data-tab="panel-char1">角色 1</button>
+      <button class="seg-btn" data-tab="panel-char2">角色 2</button>
+      <button class="seg-btn" data-tab="panel-user">User</button>
+    </div>
+    <button class="sheet-close" aria-label="关闭">&times;</button>
+  </div>
+  <div class="sheet-body">
+
+    <!-- Panel: 角色 1 -->
+    <div class="sheet-panel active" id="panel-char1">
+      <div class="section-label">AI 角色 1</div>
+      <div class="ios-group">
+        <div>
+          <label class="field-label">角色名</label>
+          <input type="text" class="field-input" id="cfg-char1-name" placeholder="AI 角色的名字">
+        </div>
+        <div>
+          <label class="field-label">头像 URL</label>
+          <div class="avatar-row">
+            <input type="text" class="field-input" id="cfg-char1-avatarUrl" placeholder="https://i.postimg.cc/...">
+            <div class="avatar-preview-wrap" id="preview-char1">
+              <img class="avatar-preview-img" alt="">
+              <span class="avatar-preview-fallback"></span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="field-label">语言风格（最高优先级）</label>
+          <textarea class="field-textarea tall" id="cfg-char1-style" placeholder="语言风格要求..."></textarea>
+        </div>
+        <div>
+          <label class="field-label">基础 Profile</label>
+          <textarea class="field-textarea tall" id="cfg-char1-profile" placeholder="角色人设描述..."></textarea>
+        </div>
+        <div>
+          <label class="field-label">世界书</label>
+          <textarea class="field-textarea tall" id="cfg-char1-worldbook" placeholder="世界观设定（参考背景）..."></textarea>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-save-character" style="width:100%;">保存设置</button>
+    </div>
+
+    <!-- Panel: 角色 2 -->
+    <div class="sheet-panel" id="panel-char2">
+      <div class="section-label">AI 角色 2（留空则不启用）</div>
+      <div class="ios-group">
+        <div>
+          <label class="field-label">角色名</label>
+          <input type="text" class="field-input" id="cfg-char2-name" placeholder="AI 角色 2 的名字">
+        </div>
+        <div>
+          <label class="field-label">头像 URL</label>
+          <div class="avatar-row">
+            <input type="text" class="field-input" id="cfg-char2-avatarUrl" placeholder="https://i.postimg.cc/...">
+            <div class="avatar-preview-wrap" id="preview-char2">
+              <img class="avatar-preview-img" alt="">
+              <span class="avatar-preview-fallback"></span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="field-label">语言风格（最高优先级）</label>
+          <textarea class="field-textarea tall" id="cfg-char2-style" placeholder="语言风格要求..."></textarea>
+        </div>
+        <div>
+          <label class="field-label">基础 Profile</label>
+          <textarea class="field-textarea tall" id="cfg-char2-profile" placeholder="角色人设描述..."></textarea>
+        </div>
+        <div>
+          <label class="field-label">世界书</label>
+          <textarea class="field-textarea tall" id="cfg-char2-worldbook" placeholder="世界观设定（参考背景）..."></textarea>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-save-char2" style="width:100%;">保存设置</button>
+    </div>
+
+    <!-- Panel: User -->
+    <div class="sheet-panel" id="panel-user">
+      <div class="section-label">User 设定</div>
+      <div class="ios-group">
+        <div>
+          <label class="field-label">用户名</label>
+          <input type="text" class="field-input" id="cfg-username" placeholder="你的显示名">
+        </div>
+        <div>
+          <label class="field-label">我的头像 URL</label>
+          <div class="avatar-row">
+            <input type="text" class="field-input" id="cfg-userAvatarUrl" placeholder="https://i.postimg.cc/...">
+            <div class="avatar-preview-wrap" id="preview-user">
+              <img class="avatar-preview-img" alt="">
+              <span class="avatar-preview-fallback"></span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label class="field-label">User 角色描述</label>
+          <textarea class="field-textarea tall" id="cfg-userProfile" placeholder="告诉 AI 你扮演的角色是谁：外貌、性格、身份、与 AI 角色的关系等..."></textarea>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-save-user" style="width:100%;">保存设置</button>
+    </div>
+
+  </div><!-- /sheet-body -->
+</div><!-- /sheet-persona -->
+
+<!-- ===== Sheet: Group ===== -->
+<div id="sheet-group" class="sheet" role="dialog" aria-modal="true">
+  <div class="sheet-grabber"></div>
+  <div class="sheet-header">
+    <span style="font-size:16px;font-weight:600;font-variation-settings:'wght' 600;flex:1;letter-spacing:-0.01em;">群聊</span>
+    <button class="sheet-close" aria-label="关闭">&times;</button>
+  </div>
+  <div class="sheet-body">
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:48px 0;text-align:center;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <p style="font-size:17px;font-weight:600;font-variation-settings:'wght' 600;color:var(--text);">群聊功能</p>
+      <p style="font-size:14px;color:var(--text-3);line-height:1.5;max-width:240px;">即将推出：跨房间群聊、成员列表、邀请码…</p>
+    </div>
+  </div>
+</div><!-- /sheet-group -->
+
+<!-- ===== More sheet ("+" drawer) ===== -->
+<div id="more-sheet-backdrop"></div>
+<div id="more-sheet" role="dialog" aria-modal="true">
+  <div class="action-group">
+    <button class="action-btn" id="btn-regenerate">重新生成</button>
+    <button class="action-btn" id="btn-export-chat">导出聊天记录</button>
+  </div>
+  <div class="action-cancel-wrap">
+    <button class="action-btn cancel" id="btn-more-cancel">取消</button>
+  </div>
+</div>
+
+<!-- Toast layer -->
+<div id="toast-layer"></div>
+
+<!-- Hidden file input for import -->
+<input type="file" id="import-file-input" accept=".json">
+
+<script>
+// ================================================================
+//  Sheet control (multi-sheet)
+// ================================================================
+const sheetBackdrop = document.getElementById('sheet-backdrop');
+let activeSheetId = null;
+
+function openSheet(sheetId, subtabId) {
+  // Close any currently open sheet first (no animation overlap)
+  if (activeSheetId && activeSheetId !== sheetId) {
+    document.getElementById(activeSheetId)?.classList.remove('open');
+  }
+  const sheetEl = document.getElementById(sheetId);
+  if (!sheetEl) return;
+  sheetEl.classList.add('open');
+  sheetBackdrop.classList.add('active');
+  document.body.classList.add('sheet-open');
+  activeSheetId = sheetId;
+  if (subtabId) switchTab(sheetId, subtabId);
+  // Mark topbar button active
+  document.querySelectorAll('.topbar-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.sheet === sheetId));
+}
+
+function closeSheet() {
+  if (activeSheetId) {
+    document.getElementById(activeSheetId)?.classList.remove('open');
+    activeSheetId = null;
+  }
+  sheetBackdrop.classList.remove('active');
+  document.body.classList.remove('sheet-open');
+  document.querySelectorAll('.topbar-btn').forEach(b => b.classList.remove('active'));
+}
+
+function switchTab(sheetId, tabId) {
+  const sheetEl = document.getElementById(sheetId);
+  if (!sheetEl) return;
+  sheetEl.querySelectorAll('.sheet-panel').forEach(p =>
+    p.classList.toggle('active', p.id === tabId));
+  sheetEl.querySelectorAll('.seg-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tabId));
+}
+
+// Topbar buttons → open/toggle sheet
+document.querySelectorAll('.topbar-btn[data-sheet]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const sheetId = btn.dataset.sheet;
+    if (activeSheetId === sheetId) {
+      closeSheet();
+    } else {
+      openSheet(sheetId, btn.dataset.subtab);
+    }
+  });
+});
+
+// Segmented buttons — scoped to their parent sheet
+document.querySelectorAll('.sheet').forEach(sheet => {
+  sheet.querySelectorAll('.seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(sheet.id, btn.dataset.tab));
+  });
+});
+
+// Close buttons
+document.querySelectorAll('.sheet-close').forEach(btn => {
+  btn.addEventListener('click', closeSheet);
+});
+
+sheetBackdrop.addEventListener('click', closeSheet);
+
+// Escape to close sheets
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (activeSheetId) closeSheet();
+    if (document.getElementById('more-sheet').classList.contains('active')) closeMoreSheet();
+    dismissCtxMenu();
+    dismissQuoteHighlight();
+  }
+});
+
+// ================================================================
+//  More sheet ("+" drawer)
+// ================================================================
+const moreSheetEl = document.getElementById('more-sheet');
+const moreSheetBackdrop = document.getElementById('more-sheet-backdrop');
+const btnMore = document.getElementById('btn-more');
+
+function openMoreSheet() {
+  moreSheetEl.classList.add('active');
+  moreSheetBackdrop.classList.add('active');
+  btnMore.classList.add('active');
+  navigator.vibrate?.(6);
+}
+function closeMoreSheet() {
+  moreSheetEl.classList.remove('active');
+  moreSheetBackdrop.classList.remove('active');
+  btnMore.classList.remove('active');
+}
+
+btnMore.addEventListener('click', () => {
+  if (moreSheetEl.classList.contains('active')) closeMoreSheet();
+  else openMoreSheet();
+});
+moreSheetBackdrop.addEventListener('click', closeMoreSheet);
+document.getElementById('btn-more-cancel').addEventListener('click', closeMoreSheet);
+
+// ===== Config field mapping =====
+const CHAR_FIELDS = ['name', 'avatarUrl', 'style', 'profile', 'worldbook'];
+
+const TOP_FIELDS = {
+  username:            'cfg-username',
+  apiKey:              'cfg-apiKey',
+  apiBaseUrl:          'cfg-apiBaseUrl',
+  modelName:           'cfg-modelName',
+  groupPrompt:         'cfg-groupPrompt',
+  userProfile:         'cfg-userProfile',
+  userAvatarUrl:       'cfg-userAvatarUrl',
+  subApiBaseUrl:       'cfg-subApiBaseUrl',
+  subApiKey:           'cfg-subApiKey',
+  subModelName:        'cfg-subModelName',
+  memorySummary:       'cfg-memorySummary',
+  summaryPrompt:       'cfg-summaryPrompt',
+  contextMessageCount: 'cfg-contextMessageCount',
+  roomId:              'cfg-roomId',
+  'firebase.apiKey':      'cfg-firebaseApiKey',
+  'firebase.databaseURL': 'cfg-databaseURL',
+  'firebase.projectId':   'cfg-projectId',
+};
+
+const STORAGE_KEY = 'rp_config';
+
+function migrateLegacyConfig(obj) {
+  if (Array.isArray(obj.characters)) return obj; // already new format
+  obj.characters = [
+    {
+      name:      obj.characterName      || '',
+      avatarUrl: obj.characterAvatarUrl || '',
+      style:     obj.prompts?.style     || '',
+      profile:   obj.prompts?.profile   || '',
+      worldbook: obj.prompts?.worldbook || '',
+    },
+    { name: '', avatarUrl: '', style: '', profile: '', worldbook: '' }
+  ];
+  obj.userProfile  = obj.prompts?.userProfile || '';
+  obj.groupPrompt  = obj.groupPrompt          || '';
+  delete obj.characterName;
+  delete obj.characterAvatarUrl;
+  delete obj.prompts;
+  return obj;
+}
+
+function readConfigFromForm() {
+  const config = { characters: [{}, {}], firebase: {} };
+  for (let i = 0; i < 2; i++) {
+    const n = i + 1;
+    for (const field of CHAR_FIELDS) {
+      const el = document.getElementById(`cfg-char${n}-${field}`);
+      config.characters[i][field] = el ? el.value.trim() : '';
+    }
+  }
+  for (const [key, elId] of Object.entries(TOP_FIELDS)) {
+    const el = document.getElementById(elId);
+    if (!el) continue;
+    let val = el.value.trim();
+    if (key === 'contextMessageCount') val = parseInt(val, 10) || 100;
+    if (key.startsWith('firebase.')) config.firebase[key.split('.')[1]] = val;
+    else config[key] = val;
+  }
+  return config;
+}
+
+function writeConfigToForm(config) {
+  if (!config) return;
+  const chars = config.characters || [{}, {}];
+  for (let i = 0; i < 2; i++) {
+    const n = i + 1;
+    const char = chars[i] || {};
+    for (const field of CHAR_FIELDS) {
+      const el = document.getElementById(`cfg-char${n}-${field}`);
+      if (el) el.value = char[field] ?? '';
+    }
+  }
+  for (const [key, elId] of Object.entries(TOP_FIELDS)) {
+    const el = document.getElementById(elId);
+    if (!el) continue;
+    let val;
+    if (key.startsWith('firebase.')) val = config.firebase?.[key.split('.')[1]] ?? '';
+    else val = config[key] ?? '';
+    el.value = val;
+  }
+  // Refresh avatar previews
+  const char1 = chars[0] || {};
+  const char2 = chars[1] || {};
+  setAvatarPreview('preview-char1', char1.avatarUrl || '', char1.name || '');
+  setAvatarPreview('preview-char2', char2.avatarUrl || '', char2.name || '');
+  setAvatarPreview('preview-user',  config.userAvatarUrl || '', config.username || '');
+}
+
+function saveConfig() {
+  const config = readConfigFromForm();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  updateRoomLabel(config.roomId);
+  showNotice('设置已保存');
+  initFirebase(config);
+  pushOwnProfile(config);
+}
+
+function loadConfig() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const config = JSON.parse(raw);
+    migrateLegacyConfig(config);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    writeConfigToForm(config);
+    updateRoomLabel(config.roomId);
+    return config;
+  } catch { return null; }
+}
+
+function exportConfig() {
+  const config = readConfigFromForm();
+  const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'rp_config.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importConfig() {
+  document.getElementById('import-file-input').click();
+}
+
+function handleImportFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const config = JSON.parse(ev.target.result);
+      writeConfigToForm(config);
+      showNotice('设置已导入');
+    } catch {
+      showNotice('导入失败：无效的 JSON 文件', true);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ===== Helpers =====
+function updateRoomLabel(roomId) {
+  document.getElementById('room-label').textContent = roomId ? roomId : 'RP Group Chat';
+}
+
+function setConnectionStatus(status) {
+  const el = document.getElementById('connection-status');
+  if (status === 'connected') {
+    el.textContent = '已连接';
+    el.className = 'connected';
+  } else if (status === 'disconnected') {
+    el.textContent = '连接断开';
+    el.className = 'disconnected';
+  } else {
+    el.textContent = '未连接';
+    el.className = '';
+  }
+}
+
+// ===== Toast Notice =====
+function showNotice(text, isError) {
+  const layer = document.getElementById('toast-layer');
+  if (!layer) return;
+  const el = document.createElement('div');
+  el.className = 'toast' + (isError ? ' error' : '');
+  el.textContent = text;
+  layer.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('leaving');
+    setTimeout(() => el.remove(), 260);
+  }, 2400);
+}
+
+// ===== Basic Markdown rendering =====
+function renderMarkdown(text) {
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+  html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+  html = html.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>');
+  return html;
+}
+
+// ===== Date separator formatter =====
+function formatDateSep(d) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((today - msgDay) / 86400000);
+  const timeStr = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+  let dateStr;
+  if (diffDays === 0) dateStr = '今天';
+  else if (diffDays === 1) dateStr = '昨天';
+  else if (diffDays < 7 && diffDays > 0) dateStr = ['周日','周一','周二','周三','周四','周五','周六'][d.getDay()];
+  else dateStr = d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric' });
+  return dateStr + '  ' + timeStr;
+}
+
+// ===== Recompute groups + date separators =====
+const GROUP_WINDOW_MS = 2 * 60 * 1000;
+
+function recomputeLayout() {
+  const inner = document.getElementById('messages-inner');
+  if (!inner) return;
+  inner.querySelectorAll('.date-sep').forEach(el => el.remove());
+
+  const rows = Array.from(inner.querySelectorAll('.msg-row'));
+  let prevRow = null;
+  let lastDateKey = null;
+
+  for (const row of rows) {
+    const msg = row._msgData;
+    if (!msg) continue;
+    const tsNum = typeof msg.timestamp === 'number' ? msg.timestamp : Date.now();
+    const t = new Date(tsNum);
+    const dateKey = t.toDateString();
+
+    if (dateKey !== lastDateKey) {
+      const sep = document.createElement('div');
+      sep.className = 'date-sep';
+      sep.textContent = formatDateSep(t);
+      inner.insertBefore(sep, row);
+      lastDateKey = dateKey;
+    }
+
+    let sameGroup = false;
+    if (prevRow) {
+      const p = prevRow._msgData;
+      if (p && p.sender === msg.sender && p.senderType === msg.senderType && p.owner === msg.owner) {
+        const pTs = typeof p.timestamp === 'number' ? p.timestamp : 0;
+        if (pTs && Math.abs(tsNum - pTs) <= GROUP_WINDOW_MS && new Date(pTs).toDateString() === dateKey) {
+          sameGroup = true;
+        }
+      }
+    }
+
+    row.classList.remove('group-start', 'group-mid', 'group-end', 'group-solo');
+    if (sameGroup) {
+      if (prevRow.classList.contains('group-solo')) {
+        prevRow.classList.remove('group-solo');
+        prevRow.classList.add('group-start');
+      } else if (prevRow.classList.contains('group-end')) {
+        prevRow.classList.remove('group-end');
+        prevRow.classList.add('group-mid');
+      }
+      row.classList.add('group-end');
+    } else {
+      row.classList.add('group-solo');
+    }
+
+    prevRow = row;
+  }
+}
+
+// ===== Render message bubble =====
+function renderMessage(msg) {
+  const config = getConfig();
+  const isOwn = config && msg.senderType === 'human' && msg.owner === config.username;
+
+  if (msg.id && document.querySelector(`.msg-row[data-id="${msg.id}"]`)) return null;
+
+  const row = document.createElement('div');
+  row.className = 'msg-row ' + (isOwn ? 'outgoing' : 'incoming') + (initialLoadComplete ? ' msg-new' : '');
+  row.dataset.id = msg.id || '';
+  row._msgData = { ...msg };
+
+  // Incoming: avatar slot on the left + content wrapper on the right
+  let container = row;
+  if (!isOwn) {
+    const avatarSlot = document.createElement('div');
+    avatarSlot.className = 'msg-avatar-slot';
+    const avatarEl = document.createElement('div');
+    avatarEl.className = 'msg-avatar';
+    avatarSlot.appendChild(avatarEl);
+    row.appendChild(avatarSlot);
+
+    container = document.createElement('div');
+    container.className = 'msg-content';
+    row.appendChild(container);
+  }
+
+  const sender = document.createElement('div');
+  sender.className = 'msg-sender';
+  sender.textContent = msg.sender;
+  container.appendChild(sender);
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+
+  if (msg.replyTo) {
+    const quote = document.createElement('div');
+    quote.className = 'msg-reply-quote';
+    const quoteSender = document.createElement('span');
+    quoteSender.className = 'reply-quote-sender';
+    quoteSender.textContent = msg.replyTo.sender + ': ';
+    const preview = msg.replyTo.content.replace(/\n/g, ' ');
+    const quoteText = document.createTextNode(
+      preview.length > 24 ? preview.slice(0, 24) + '…' : preview
+    );
+    quote.appendChild(quoteSender);
+    quote.appendChild(quoteText);
+    if (msg.replyTo.id) {
+      quote.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const orig = document.querySelector(`.msg-row[data-id="${msg.replyTo.id}"]`);
+        if (orig) {
+          orig.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => highlightQuotedMsg(orig), 420);
+        }
+      });
+    }
+    bubble.appendChild(quote);
+  }
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  body.innerHTML = renderMarkdown(msg.content);
+  bubble.appendChild(body);
+
+  container.appendChild(bubble);
+
+  if (msg.edited) {
+    const edited = document.createElement('div');
+    edited.className = 'msg-edited';
+    edited.textContent = '已编辑';
+    container.appendChild(edited);
+  }
+
+  // Apply avatar for incoming messages
+  if (!isOwn) applyAvatarToRow(row, msg);
+
+  setupBubbleInteraction(row);
+
+  const inner = document.getElementById('messages-inner');
+  inner.appendChild(row);
+  recomputeLayout();
+
+  const messagesEl = document.getElementById('messages');
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return row;
+}
+
+function updateMessageBubble(id, msg) {
+  const el = document.querySelector(`.msg-row[data-id="${id}"]`);
+  if (!el) return;
+  el._msgData = { ...msg, id };
+  const body = el.querySelector('.msg-body');
+  if (body) body.innerHTML = renderMarkdown(msg.content);
+  if (msg.edited && !el.querySelector('.msg-edited')) {
+    const edited = document.createElement('div');
+    edited.className = 'msg-edited';
+    edited.textContent = '已编辑';
+    const time = el.querySelector('.msg-time');
+    // time may be inside .msg-content (incoming) or directly in row (outgoing)
+    time.parentNode.insertBefore(edited, time);
+  }
+}
+
+// ================================================================
+//  Bubble interaction: long-press → ctx menu
+// ================================================================
+
+let activeCtxMenu = null;
+let replyTarget = null;
+let _activeQuoteHL = null;
+
+function dismissQuoteHighlight() {
+  if (!_activeQuoteHL) return;
+  const { orig, timer } = _activeQuoteHL;
+  _activeQuoteHL = null;
+  clearTimeout(timer);
+  orig.classList.add('shrink-back');
+  setTimeout(() => {
+    orig.classList.remove('quote-lifted', 'shrink-back');
+  }, 340);
+}
+
+function highlightQuotedMsg(orig) {
+  dismissQuoteHighlight();
+  orig.classList.add('quote-lifted');
+  const timer = setTimeout(dismissQuoteHighlight, 400);
+  _activeQuoteHL = { orig, timer };
+}
+
+function dismissCtxMenu() {
+  if (activeCtxMenu) {
+    activeCtxMenu.menu.remove();
+    activeCtxMenu.backdrop.remove();
+    if (activeCtxMenu.row) activeCtxMenu.row.classList.remove('ctx-lifted');
+    activeCtxMenu = null;
+  }
+}
+
+function setupBubbleInteraction(el) {
+  let timer = null;
+  let longPressFired = false;
+  let startX, startY;
+  const LONG_PRESS_MS = 450;
+  const MOVE_THRESHOLD = 10;
+
+  function start(e) {
+    longPressFired = false;
+    const point = e.touches ? e.touches[0] : e;
+    startX = point.clientX;
+    startY = point.clientY;
+    timer = setTimeout(() => {
+      timer = null;
+      longPressFired = true;
+      navigator.vibrate?.(12);
+      showCtxMenu(el);
+    }, LONG_PRESS_MS);
+  }
+
+  function move(e) {
+    if (!timer) return;
+    const point = e.touches ? e.touches[0] : e;
+    if (Math.abs(point.clientX - startX) > MOVE_THRESHOLD ||
+        Math.abs(point.clientY - startY) > MOVE_THRESHOLD) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  }
+
+  function end() {
+    if (timer) { clearTimeout(timer); timer = null; }
+  }
+
+  el.addEventListener('touchstart', start, { passive: true });
+  el.addEventListener('touchmove', move, { passive: true });
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchcancel', end);
+
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    longPressFired = true;
+    showCtxMenu(el);
+  });
+  el.addEventListener('mousedown', (e) => { if (e.button === 0) start(e); });
+  el.addEventListener('mousemove', move);
+  el.addEventListener('mouseup', end);
+  el.addEventListener('mouseleave', end);
+
+  el.addEventListener('click', (e) => {
+    if (longPressFired) { longPressFired = false; }
+  });
+}
+
+function showCtxMenu(rowEl) {
+  dismissCtxMenu();
+
+  const msg = rowEl._msgData;
+  if (!msg) return;
+
+  const config = getConfig();
+  const isOwn = config && msg.owner === config.username;
+
+  // Backdrop
+  const backdrop = document.createElement('div');
+  backdrop.className = 'ctx-backdrop';
+  backdrop.addEventListener('click', dismissCtxMenu);
+  document.body.appendChild(backdrop);
+
+  // Lift pressed row
+  rowEl.classList.add('ctx-lifted');
+
+  // Menu
+  const menu = document.createElement('div');
+  menu.className = 'ctx-menu';
+
+  function addItem(label, cls, handler) {
+    const btn = document.createElement('button');
+    btn.className = 'ctx-menu-item' + (cls ? ' ' + cls : '');
+    btn.textContent = label;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dismissCtxMenu();
+      handler();
+    });
+    menu.appendChild(btn);
+  }
+  function addSep() {
+    const sep = document.createElement('div');
+    sep.className = 'ctx-menu-sep';
+    menu.appendChild(sep);
+  }
+
+  addItem('回复', '', () => startReply(msg));
+  addSep();
+  addItem('复制', '', () => {
+    if (navigator.clipboard) navigator.clipboard.writeText(msg.content).then(
+      () => showNotice('已复制'),
+      () => showNotice('复制失败', true)
+    );
+  });
+  if (isOwn) {
+    addSep();
+    addItem('编辑', '', () => startEdit(rowEl));
+    addSep();
+    addItem('删除', 'danger', () => deleteMessage(msg.id));
+  }
+
+  document.body.appendChild(menu);
+
+  // Position menu near bubble
+  const rect = rowEl.getBoundingClientRect();
+  const mw = menu.offsetWidth;
+  const mh = menu.offsetHeight;
+  const isOutgoing = rowEl.classList.contains('outgoing');
+
+  let left, top;
+  if (isOutgoing) left = rect.right - mw;
+  else            left = rect.left;
+
+  if (rect.bottom + mh + 12 < window.innerHeight) top = rect.bottom + 10;
+  else                                             top = rect.top - mh - 10;
+
+  if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8;
+  if (left < 8) left = 8;
+  if (top < 8) top = 8;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+
+  activeCtxMenu = { menu, backdrop, row: rowEl };
+}
+
+// ----- Edit message inline -----
+function startEdit(rowEl) {
+  const msg = rowEl._msgData;
+  if (!msg) return;
+
+  const bubble = rowEl.querySelector('.bubble');
+  const body = bubble?.querySelector('.msg-body');
+  if (!body) return;
+
+  body.style.display = 'none';
+
+  const editArea = document.createElement('textarea');
+  editArea.className = 'msg-edit-area';
+  editArea.value = msg.content;
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'msg-edit-buttons';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-primary';
+  saveBtn.textContent = '保存';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.textContent = '取消';
+
+  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(saveBtn);
+
+  bubble.appendChild(editArea);
+  bubble.appendChild(btnRow);
+
+  editArea.style.height = Math.max(60, editArea.scrollHeight) + 'px';
+  editArea.focus();
+
+  function cleanup() {
+    editArea.remove();
+    btnRow.remove();
+    body.style.display = '';
+  }
+
+  cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); cleanup(); });
+
+  saveBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const newContent = editArea.value.trim();
+    if (!newContent) return;
+    if (newContent === msg.content) { cleanup(); return; }
+
+    saveBtn.classList.add('loading');
+    try {
+      await messagesRef.child(msg.id).update({
+        content: newContent,
+        edited: true,
+      });
+      cleanup();
+    } catch (err) {
+      showNotice('编辑失败: ' + err.message, true);
+      saveBtn.classList.remove('loading');
+    }
+  });
+}
+
+// ----- Reply to message -----
+function startReply(msg) {
+  replyTarget = { id: msg.id, sender: msg.sender, content: msg.content };
+  const bar = document.getElementById('reply-bar');
+  bar.querySelector('.reply-sender').textContent = msg.sender;
+  bar.querySelector('.reply-text').textContent =
+    msg.content.length > 80 ? msg.content.slice(0, 80) + '...' : msg.content;
+  bar.classList.add('active');
+  document.getElementById('msg-input').focus();
+}
+
+function cancelReply() {
+  replyTarget = null;
+  document.getElementById('reply-bar').classList.remove('active');
+}
+
+document.querySelector('#reply-bar .reply-close').addEventListener('click', cancelReply);
+
+// ----- Delete message -----
+async function deleteMessage(id) {
+  if (!messagesRef || !id) return;
+  try {
+    await messagesRef.child(id).remove();
+  } catch (e) {
+    showNotice('删除失败: ' + e.message, true);
+  }
+}
+
+// ================================================================
+//  Firebase
+// ================================================================
+
+let firebaseApp = null;
+let db = null;
+let messagesRef = null;
+let profilesRef = null;
+let currentListener = null;
+let renderedIds = new Set();
+let initialLoadComplete = false;
+let profilesByOwner = {};
+
+function getConfig() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
+function pushOwnProfile(config) {
+  config = config || getConfig();
+  if (!config || !config.username || !db || !config.roomId) return;
+  const enabledChars = (config.characters || [])
+    .filter(c => c.name?.trim())
+    .map(c => ({ name: c.name.trim(), avatarUrl: c.avatarUrl || '' }));
+  const profile = {
+    username: config.username,
+    userAvatarUrl: config.userAvatarUrl || null,
+    characters: enabledChars,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP,
+  };
+  db.ref(`rooms/${config.roomId}/profiles/${config.username}`)
+    .set(profile)
+    .catch(e => console.warn('[RP Chat] pushOwnProfile failed:', e));
+}
+
+function refreshAllAvatars() {
+  document.querySelectorAll('#messages-inner .msg-row.incoming').forEach(row => {
+    if (row._msgData) applyAvatarToRow(row, row._msgData);
+  });
+}
+
+function applyAvatarToRow(row, msg) {
+  const avatarEl = row.querySelector('.msg-avatar');
+  if (!avatarEl) return;
+
+  const profile = profilesByOwner[msg.owner];
+  let url;
+  if (msg.senderType === 'ai') {
+    const charEntry = (profile?.characters || []).find(c => c.name === msg.sender);
+    url = charEntry?.avatarUrl || null;
+  } else {
+    url = profile?.userAvatarUrl;
+  }
+  const fallbackChar = msg.sender ? [...msg.sender][0] : '?';
+
+  // Clear previous content
+  avatarEl.innerHTML = '';
+  avatarEl.style.background = '';
+  avatarEl.style.color = '';
+
+  if (url) {
+    const img = document.createElement('img');
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:50%;';
+    img.alt = '';
+    img.onload = () => { avatarEl.style.background = 'transparent'; };
+    img.onerror = () => {
+      img.remove();
+      _applyMsgAvatarFallback(avatarEl, fallbackChar);
+    };
+    img.src = url;
+    avatarEl.appendChild(img);
+  } else {
+    _applyMsgAvatarFallback(avatarEl, fallbackChar);
+  }
+}
+
+function _applyMsgAvatarFallback(el, char) {
+  const c = char ? [...char][0].toUpperCase() : '?';
+  el.style.background = `hsl(${hashHue(c)}, 42%, 52%)`;
+  el.style.color = '#fff';
+  el.textContent = c;
+}
+
+function initFirebase(config) {
+  config = config || getConfig();
+  if (!config) return;
+
+  const { firebase: fb, roomId } = config;
+  if (!fb || !fb.apiKey || !fb.databaseURL || !fb.projectId || !roomId) {
+    setConnectionStatus('none');
+    return;
+  }
+
+  if (currentListener && messagesRef) {
+    messagesRef.off('child_added', currentListener.onAdded);
+    messagesRef.off('child_removed', currentListener.onRemoved);
+    messagesRef.off('child_changed', currentListener.onChanged);
+  }
+  if (profilesRef) {
+    profilesRef.off('value');
+    profilesRef = null;
+  }
+  profilesByOwner = {};
+
+  if (firebaseApp) {
+    try { firebaseApp.delete(); } catch {}
+    firebaseApp = null;
+  }
+
+  try {
+    firebaseApp = firebase.initializeApp({
+      apiKey: fb.apiKey,
+      databaseURL: fb.databaseURL,
+      projectId: fb.projectId,
+    });
+  } catch (e) {
+    firebaseApp = firebase.app();
+  }
+
+  db = firebase.database();
+
+  db.ref('.info/connected').on('value', (snap) => {
+    setConnectionStatus(snap.val() ? 'connected' : 'disconnected');
+  });
+
+  document.getElementById('messages-inner').innerHTML = '';
+  renderedIds.clear();
+  initialLoadComplete = false;
+  setTimeout(() => { initialLoadComplete = true; }, 1500);
+
+  profilesRef = db.ref(`rooms/${roomId}/profiles`);
+  profilesRef.on('value', (snap) => {
+    profilesByOwner = snap.val() || {};
+    refreshAllAvatars();
+  });
+
+  messagesRef = db.ref(`rooms/${roomId}/messages`);
+
+  const onAdded = (snap) => {
+    const msg = snap.val();
+    if (!msg) return;
+    msg.id = snap.key;
+    if (renderedIds.has(msg.id)) return;
+    renderedIds.add(msg.id);
+    renderMessage(msg);
+  };
+
+  const onRemoved = (snap) => {
+    const id = snap.key;
+    renderedIds.delete(id);
+    const el = document.querySelector(`.msg-row[data-id="${id}"]`);
+    if (el) {
+      el.classList.add('collapsing');
+      setTimeout(() => { el.remove(); recomputeLayout(); }, 300);
+    } else {
+      recomputeLayout();
+    }
+  };
+
+  const onChanged = (snap) => {
+    const msg = snap.val();
+    if (!msg) return;
+    updateMessageBubble(snap.key, msg);
+  };
+
+  messagesRef.orderByChild('timestamp').on('child_added', onAdded);
+  messagesRef.on('child_removed', onRemoved);
+  messagesRef.on('child_changed', onChanged);
+
+  currentListener = { onAdded, onRemoved, onChanged };
+  updateRoomLabel(roomId);
+}
+
+function sendHumanMessage() {
+  const config = getConfig();
+  if (!config || !config.username) {
+    showNotice('请先在设置中填写用户名并保存', true);
+    return;
+  }
+  if (!messagesRef) {
+    showNotice('请先配置 Firebase 并保存设置', true);
+    return;
+  }
+
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  // Send feedback
+  navigator.vibrate?.(8);
+  const sb = document.getElementById('btn-send');
+  sb.classList.remove('send-flash');
+  void sb.offsetWidth; // reflow to restart animation
+  sb.classList.add('send-flash');
+  setTimeout(() => sb.classList.remove('send-flash'), 400);
+
+  const msgId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const msgData = {
+    sender: config.username,
+    senderType: 'human',
+    owner: config.username,
+    content: text,
+    timestamp: firebase.database.ServerValue.TIMESTAMP,
+  };
+  if (replyTarget) {
+    msgData.replyTo = {
+      id: replyTarget.id,
+      sender: replyTarget.sender,
+      content: replyTarget.content.slice(0, 200),
+    };
+  }
+  messagesRef.child(msgId).set(msgData).then(() => {
+    input.value = '';
+    cancelReply();
+    autoResizeInput();
+    updateSendButtonState();
+  }).catch((err) => {
+    showNotice('发送失败: ' + err.message, true);
+  });
+}
+
+// ================================================================
+//  AI Reply — Prompt Assembly + Streaming + Regenerate
+// ================================================================
+
+let isGenerating = false;
+let currentAbortController = null;
+
+const SEND_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+const STOP_ICON_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>';
+
+function buildSoloSystemPrompt(config, char) {
+  const { memorySummary, userProfile, groupPrompt } = config;
+  const characterName = char.name;
+  let s = '';
+
+  s += `## 前提\n这是一个线上群聊 RP 软件。你扮演的角色「${characterName}」正在通过线上聊天与其他角色进行实时对话。所有互动都以聊天消息的形式发生——就像真人在用即时通讯软件聊天一样。\n\n`;
+
+  if (groupPrompt) {
+    s += `## 群总提示词\n${groupPrompt}\n\n`;
+  }
+
+  if (char.style) {
+    s += `## 核心指令：语言风格（最高优先级 - 必须严格遵守）\n${char.style}\n你必须始终严格遵守以上语言风格要求，这是最高优先级的指令，任何情况下不得违背。\n\n`;
+  }
+  if (char.profile) {
+    s += `## 角色设定\n你正在扮演「${characterName}」。以下是你的角色基础信息：\n${char.profile}\n请始终保持角色一致性，按照以上设定进行回应。\n\n`;
+  }
+  if (char.worldbook) {
+    s += `## 世界观设定（参考信息）\n以下是故事发生的世界观背景，请在回应中自然融入这些设定，但不要生硬地复述：\n${char.worldbook}\n\n`;
+  }
+  if (userProfile) {
+    s += `## 用户角色信息\n以下是与你互动的用户所扮演的角色信息，请据此理解对方的身份和行为动机：\n${userProfile}\n\n`;
+  }
+  if (memorySummary) {
+    s += `## 前文记忆\n以下是之前剧情的摘要，请基于这些信息保持故事连续性：\n${memorySummary}\n\n`;
+  }
+
+  s += `## 对话规则
+- 你只扮演「${characterName}」，不要替其他角色说话或行动
+- **像真人发消息一样回复**：语气自然、口语化，符合角色在线上聊天时的表达习惯
+- 每次回复发送 **2~5 条消息**，就像真人连续发好几条一样，不要把所有内容塞进一条长消息里
+- 每条消息保持简短自然，长度参考真人聊天习惯（一条几个字到几行都可以，视情境而定）
+- 用 \`[SPLIT]\` 标记来分隔每条消息，例如：
+  你好啊[SPLIT]今天怎么样？[SPLIT]我刚吃完饭
+- 不要打破第四面墙，不要提及自己是 AI
+- 根据角色设定自然地回应，给其他角色留出互动空间
+- 你可以针对某一条特定的消息进行引用回复，当你想要单独回应某句话时，在该条消息最开头加上 \`[REPLY:#消息ID]\`（ID 即用户消息格式 \`[用户名 #xxx]\` 中的 \`xxx\` 部分），例如：\`[REPLY:#abc123] 你刚才说的那个...\`；只在需要明确针对某句话回应时才使用，不要每条都加`;
+
+  return s;
+}
+
+function buildGroupSystemPrompt(config) {
+  const chars = config.characters || [];
+  const char1 = chars[0] || {};
+  const char2 = chars[1] || {};
+  const { memorySummary, userProfile, groupPrompt } = config;
+  let s = '';
+
+  s += `## 前提\n这是一个线上群聊 RP 软件。你同时扮演群里的多个角色，根据上下文判断哪些角色会对最新消息做出反应、按什么顺序发言。\n\n`;
+
+  if (groupPrompt) {
+    s += `## 群总提示词\n${groupPrompt}\n\n`;
+  }
+
+  s += `## 角色 1：${char1.name}\n`;
+  if (char1.style)     s += `### 语言风格（严格遵守）\n${char1.style}\n`;
+  if (char1.profile)   s += `### 角色设定\n${char1.profile}\n`;
+  if (char1.worldbook) s += `### 世界观\n${char1.worldbook}\n`;
+  s += '\n';
+
+  s += `## 角色 2：${char2.name}\n`;
+  if (char2.style)     s += `### 语言风格（严格遵守）\n${char2.style}\n`;
+  if (char2.profile)   s += `### 角色设定\n${char2.profile}\n`;
+  if (char2.worldbook) s += `### 世界观\n${char2.worldbook}\n`;
+  s += '\n';
+
+  if (userProfile) {
+    s += `## 用户角色信息\n${userProfile}\n\n`;
+  }
+  if (memorySummary) {
+    s += `## 前文记忆\n${memorySummary}\n\n`;
+  }
+
+  s += `## 发言规则
+- 根据场景自然决定每个角色是否要发言、说什么、说几次
+- 两个角色可以连续说话、互相回应、甚至拌嘴
+- 每个角色必须严格遵守自己的语言风格，两个角色的声音必须有明显差异
+- **像真人发消息一样**：语气自然、口语化。每一次发言里用 \`[SPLIT]\` 把内容拆成 **2~5 条**连续的短消息，就像真人连着发好几条一样，不要把所有内容塞进一条长消息里
+- 每条消息保持简短自然，长度参考真人聊天习惯（一条几个字到几行都可以）
+- 最多进行 **3 次发言轮次**（每个轮次由一个角色完成，可以包含多条 \`[SPLIT]\` 消息）
+- 如果当前场景没有角色应该发言（比如需要等用户回应），直接输出 [END]
+- 不要打破第四面墙，不要提及自己是 AI
+
+## 输出格式（严格遵守）
+每次发言以独占一行的 \`[角色名]\` 开头，紧接台词内容（可跨行，内部用 \`[SPLIT]\` 拆分多条消息）。
+下一次发言再起一行 \`[角色名]\`。
+全部发言结束后，输出一行 \`[END]\`。
+
+示例：
+[${char1.name}]
+你猜我今天遇到啥了[SPLIT]超离谱的[SPLIT]绝对想不到
+[${char2.name}]
+啊？[SPLIT]说来听听
+[END]`;
+
+  return s;
+}
+
+function convertHistory(firebaseMessages, characterName) {
+  const converted = firebaseMessages.map(msg => {
+    if (msg.sender === characterName && msg.senderType === 'ai') {
+      return { role: 'assistant', content: msg.content };
+    } else {
+      const idTag = msg.id ? ` #${msg.id}` : '';
+      return { role: 'user', content: `[${msg.sender}${idTag}]: ${msg.content}` };
+    }
+  });
+  const merged = [];
+  for (const msg of converted) {
+    if (merged.length > 0 && merged[merged.length - 1].role === msg.role) {
+      merged[merged.length - 1].content += '\n\n' + msg.content;
+    } else {
+      merged.push({ ...msg });
+    }
+  }
+  return merged;
+}
+
+function convertHistoryGroup(firebaseMessages, ownCharNames) {
+  const nameSet = new Set(ownCharNames);
+  const converted = firebaseMessages.map(msg => {
+    if (nameSet.has(msg.sender) && msg.senderType === 'ai') {
+      return { role: 'assistant', content: msg.content };
+    } else {
+      const idTag = msg.id ? ` #${msg.id}` : '';
+      return { role: 'user', content: `[${msg.sender}${idTag}]: ${msg.content}` };
+    }
+  });
+  const merged = [];
+  for (const msg of converted) {
+    if (merged.length > 0 && merged[merged.length - 1].role === msg.role) {
+      merged[merged.length - 1].content += '\n\n' + msg.content;
+    } else {
+      merged.push({ ...msg });
+    }
+  }
+  return merged;
+}
+
+async function fetchRecentMessages(count) {
+  if (!messagesRef) return [];
+  const snap = await messagesRef.orderByChild('timestamp').limitToLast(count).once('value');
+  const msgs = [];
+  snap.forEach(child => {
+    const m = child.val();
+    m.id = child.key;
+    msgs.push(m);
+  });
+  return msgs;
+}
+
+function getChatUrl(baseUrl) {
+  let url = baseUrl.replace(/\/+$/, '');
+  if (!url.endsWith('/chat/completions')) {
+    url += '/chat/completions';
+  }
+  return url;
+}
+
+async function streamRequest(url, apiKey, body, onChunk, onDone, signal) {
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`API Error ${resp.status}: ${errText}`);
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullContent = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data: ')) continue;
+      const data = trimmed.slice(6);
+      if (data === '[DONE]') {
+        onDone(fullContent);
+        return fullContent;
+      }
+      try {
+        const parsed = JSON.parse(data);
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) {
+          fullContent += content;
+          onChunk(content, fullContent);
+        }
+      } catch {}
+    }
+  }
+
+  onDone(fullContent);
+  return fullContent;
+}
+
+function setGeneratingState(active) {
+  isGenerating = active;
+  const regenBtn = document.getElementById('btn-regenerate');
+  if (regenBtn) {
+    if (active) regenBtn.classList.add('loading');
+    else regenBtn.classList.remove('loading');
+  }
+  if (active) {
+    sendBtnEl.classList.add('loading');
+    sendBtnEl.innerHTML = STOP_ICON_SVG;
+  } else {
+    sendBtnEl.classList.remove('loading');
+    sendBtnEl.innerHTML = SEND_ICON_SVG;
+  }
+}
+
+async function sendSoloReply(config, char1) {
+  setGeneratingState(true);
+  const controller = new AbortController();
+  currentAbortController = controller;
+
+  let bubbleEl = null;
+  let tempId = null;
+
+  try {
+    const count = parseInt(config.contextMessageCount, 10) || 100;
+    const recentMsgs = await fetchRecentMessages(count);
+
+    const systemContent = buildSoloSystemPrompt(config, char1);
+    const history = convertHistory(recentMsgs, char1.name);
+    const apiMessages = [
+      { role: 'system', content: systemContent },
+      ...history,
+    ];
+
+    if (!apiMessages.some(m => m.role === 'user')) {
+      apiMessages.push({ role: 'user', content: '[系统: 请开始角色扮演，以你的角色身份发出第一条消息。]' });
+    }
+
+    const chatUrl = getChatUrl(config.apiBaseUrl);
+    const requestBody = { model: config.modelName || 'gpt-4o', stream: true, messages: apiMessages };
+
+    tempId = '_streaming_' + Date.now();
+    const tempMsg = {
+      id: tempId,
+      sender: char1.name,
+      senderType: 'ai',
+      owner: config.username,
+      content: '',
+      timestamp: Date.now(),
+    };
+    bubbleEl = renderMessage(tempMsg);
+    const bodyEl = bubbleEl.querySelector('.msg-body');
+
+    bubbleEl.classList.add('msg-typing');
+    bodyEl.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+
+    let firstChunk = true;
+    const fullContent = await streamRequest(
+      chatUrl,
+      config.apiKey,
+      requestBody,
+      (chunk, full) => {
+        if (firstChunk) {
+          firstChunk = false;
+          bubbleEl.classList.remove('msg-typing');
+        }
+        bodyEl.textContent = full;
+        document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+      },
+      (full) => { bodyEl.innerHTML = renderMarkdown(full); },
+      controller.signal,
+    );
+
+    bubbleEl.remove();
+    renderedIds.delete(tempId);
+    bubbleEl = null;
+    recomputeLayout();
+
+    if (fullContent.trim()) {
+      const parts = fullContent.split(/\[SPLIT\]/i)
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+
+      for (let i = 0; i < parts.length; i++) {
+        let part = parts[i];
+        let replyToData = null;
+
+        const replyMatch = part.match(/^\[REPLY:#([^\]]+)\]\s*/i);
+        if (replyMatch) {
+          const quotedId = replyMatch[1].trim();
+          part = part.slice(replyMatch[0].length).trim();
+          const quotedMsg = recentMsgs.find(m => m.id === quotedId);
+          if (quotedMsg) {
+            replyToData = {
+              id: quotedMsg.id,
+              sender: quotedMsg.sender,
+              content: quotedMsg.content.slice(0, 200),
+            };
+          }
+        }
+
+        if (!part) continue;
+        const msgId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const msgData = {
+          sender: char1.name,
+          senderType: 'ai',
+          owner: config.username,
+          content: part,
+          timestamp: firebase.database.ServerValue.TIMESTAMP,
+        };
+        if (replyToData) msgData.replyTo = replyToData;
+        await messagesRef.child(msgId).set(msgData);
+        if (i < parts.length - 1) await new Promise(r => setTimeout(r, 50));
+      }
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') showNotice('AI 生成失败: ' + e.message, true);
+  } finally {
+    if (bubbleEl) { bubbleEl.remove(); renderedIds.delete(tempId); recomputeLayout(); }
+    setGeneratingState(false);
+    currentAbortController = null;
+  }
+}
+
+async function sendGroupReply(config, char1, char2) {
+  setGeneratingState(true);
+  const controller = new AbortController();
+  currentAbortController = controller;
+
+  const ownCharNames = [char1.name, char2.name].filter(n => n?.trim());
+
+  let phase = 'WAITING_TAG'; // WAITING_TAG | IN_CONTENT | DONE
+  let activeChar = null;
+  let lineBuffer = '';
+  let currentContent = '';
+  let tempBubbleEl = null;
+  let tempBubbleBodyEl = null;
+  let tempId = null;
+  let firstContent = true;
+  // One typing-dot placeholder per char, shown immediately so the user sees
+  // "both are about to speak". When a char's tag arrives, their placeholder is
+  // promoted into the streaming bubble so there's no flash/reflow.
+  const placeholders = []; // [{ name, id, el }]
+
+  function createPlaceholderBubble(charName) {
+    const id = '_loading_' + Math.random().toString(36).slice(2, 9);
+    const msg = { id, sender: charName, senderType: 'ai', owner: config.username, content: '', timestamp: Date.now() };
+    const el = renderMessage(msg);
+    el.classList.add('msg-typing');
+    el.querySelector('.msg-body').innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+    placeholders.push({ name: charName, id, el });
+  }
+
+  function removeAllPlaceholders() {
+    for (const p of placeholders) {
+      p.el.remove();
+      renderedIds.delete(p.id);
+    }
+    placeholders.length = 0;
+  }
+
+  function ensureTempBubble(charName) {
+    if (tempBubbleEl) return;
+    // Reuse the placeholder bubble for this char if it exists
+    const idx = placeholders.findIndex(p => p.name === charName);
+    if (idx !== -1) {
+      const p = placeholders[idx];
+      placeholders.splice(idx, 1);
+      tempBubbleEl = p.el;
+      tempBubbleBodyEl = p.el.querySelector('.msg-body');
+      tempId = p.id;
+      firstContent = true; // dots already present; cleared on first content chunk
+      return;
+    }
+    tempId = '_streaming_' + Date.now();
+    const tempMsg = { id: tempId, sender: charName, senderType: 'ai', owner: config.username, content: '', timestamp: Date.now() };
+    tempBubbleEl = renderMessage(tempMsg);
+    tempBubbleBodyEl = tempBubbleEl.querySelector('.msg-body');
+    tempBubbleEl.classList.add('msg-typing');
+    tempBubbleBodyEl.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+    firstContent = true;
+  }
+
+  function removeTempBubble() {
+    if (tempBubbleEl) {
+      tempBubbleEl.remove();
+      if (tempId) renderedIds.delete(tempId);
+      tempBubbleEl = null;
+      tempBubbleBodyEl = null;
+      tempId = null;
+    }
+  }
+
+  function updateLiveBubble() {
+    if (!tempBubbleBodyEl) return;
+    if (firstContent) {
+      firstContent = false;
+      tempBubbleEl.classList.remove('msg-typing');
+    }
+    tempBubbleBodyEl.textContent = currentContent + lineBuffer;
+    document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+  }
+
+  async function flushCurrentBubble() {
+    const content = currentContent.trim();
+    currentContent = '';
+    removeTempBubble();
+    recomputeLayout();
+    if (!activeChar || !content) return;
+
+    const parts = content.split(/\[SPLIT\]/i)
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+
+    for (let i = 0; i < parts.length; i++) {
+      const msgId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      await messagesRef.child(msgId).set({
+        sender: activeChar,
+        senderType: 'ai',
+        owner: config.username,
+        content: parts[i],
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+      });
+      if (i < parts.length - 1) await new Promise(r => setTimeout(r, 50));
+    }
+  }
+
+  async function processCompleteLine(line) {
+    if (phase === 'DONE') return;
+    const trimmed = line.trim();
+
+    // Match standalone tag: [Name] or 【Name】 on its own line
+    const tagMatch = trimmed.match(/^[\[【](.+?)[\]】]$/);
+    if (tagMatch) {
+      const name = tagMatch[1].trim();
+
+      if (name === 'END') {
+        if (phase === 'IN_CONTENT') await flushCurrentBubble();
+        phase = 'DONE';
+        return;
+      }
+
+      if (ownCharNames.includes(name)) {
+        if (phase === 'IN_CONTENT') await flushCurrentBubble();
+        activeChar = name;
+        phase = 'IN_CONTENT';
+        ensureTempBubble(name);
+        return;
+      }
+    }
+
+    if (phase === 'IN_CONTENT') {
+      currentContent += line + '\n';
+      updateLiveBubble();
+    }
+  }
+
+  try {
+    // Show typing-dot placeholders immediately for instant feedback
+    for (const name of ownCharNames) createPlaceholderBubble(name);
+    document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+
+    const count = parseInt(config.contextMessageCount, 10) || 100;
+    const recentMsgs = await fetchRecentMessages(count);
+
+    const systemContent = buildGroupSystemPrompt(config);
+    const history = convertHistoryGroup(recentMsgs, ownCharNames);
+    const apiMessages = [
+      { role: 'system', content: systemContent },
+      ...history,
+    ];
+
+    if (!apiMessages.some(m => m.role === 'user')) {
+      apiMessages.push({ role: 'user', content: '[系统: 请开始角色扮演，两个角色共同发起对话。]' });
+    }
+
+    const chatUrl = getChatUrl(config.apiBaseUrl);
+    const requestBody = {
+      model: config.modelName || 'gpt-4o',
+      stream: true,
+      max_tokens: 2000,
+      messages: apiMessages,
+    };
+
+    const resp = await fetch(chatUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`API Error ${resp.status}: ${errText}`);
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = '';
+
+    // Feed a chunk of model text into the state machine (splits on \n)
+    async function feedModelText(text) {
+      lineBuffer += text;
+      let nlIdx;
+      while ((nlIdx = lineBuffer.indexOf('\n')) !== -1) {
+        const completeLine = lineBuffer.slice(0, nlIdx);
+        lineBuffer = lineBuffer.slice(nlIdx + 1);
+        await processCompleteLine(completeLine);
+        if (phase === 'DONE') return;
+      }
+    }
+
+    outer: while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      sseBuffer += decoder.decode(value, { stream: true });
+      const sseLines = sseBuffer.split('\n');
+      sseBuffer = sseLines.pop(); // keep incomplete SSE line
+
+      for (const sseLine of sseLines) {
+        const trimmed = sseLine.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') break outer;
+        try {
+          const parsed = JSON.parse(data);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) {
+            await feedModelText(delta);
+            if (phase === 'DONE') break outer;
+          }
+        } catch {}
+      }
+
+      if (phase === 'IN_CONTENT') updateLiveBubble();
+    }
+
+    // Stream ended — process any trailing incomplete line as a final complete line
+    if (lineBuffer.length > 0 && phase !== 'DONE') {
+      await processCompleteLine(lineBuffer);
+      lineBuffer = '';
+    }
+    // Auto-flush if model forgot [END]
+    if (phase === 'IN_CONTENT') {
+      await flushCurrentBubble();
+    }
+
+  } catch (e) {
+    if (e.name !== 'AbortError') showNotice('AI 生成失败: ' + e.message, true);
+    // On abort: discard in-progress bubble, keep already-flushed ones
+    removeTempBubble();
+  } finally {
+    removeAllPlaceholders();
+    recomputeLayout();
+    setGeneratingState(false);
+    currentAbortController = null;
+  }
+}
+
+async function sendAIMessage() {
+  if (isGenerating) return;
+
+  const config = getConfig();
+  const char1 = config?.characters?.[0];
+  const char2 = config?.characters?.[1];
+
+  if (!config || !config.apiKey || !config.apiBaseUrl || !char1?.name) {
+    showNotice('请先完成设置（API Key、Base URL、角色名）并保存', true);
+    return;
+  }
+  if (!messagesRef) {
+    showNotice('请先配置 Firebase 并保存设置', true);
+    return;
+  }
+
+  if (char2?.name?.trim()) {
+    await sendGroupReply(config, char1, char2);
+  } else {
+    await sendSoloReply(config, char1);
+  }
+}
+
+async function regenerate() {
+  if (isGenerating) return;
+
+  const config = getConfig();
+  if (!config || !config.username) {
+    showNotice('请先完成设置并保存', true);
+    return;
+  }
+  if (!messagesRef) {
+    showNotice('请先配置 Firebase 并保存设置', true);
+    return;
+  }
+
+  const snap = await messagesRef.orderByChild('timestamp').once('value');
+  const allMsgs = [];
+  snap.forEach(child => {
+    allMsgs.push({ key: child.key, ...child.val() });
+  });
+
+  const keysToDelete = [];
+  for (let i = allMsgs.length - 1; i >= 0; i--) {
+    const m = allMsgs[i];
+    if (m.senderType === 'ai' && m.owner === config.username) {
+      keysToDelete.push(m.key);
+    } else {
+      break;
+    }
+  }
+
+  if (keysToDelete.length === 0) {
+    showNotice('没有找到可重新生成的 AI 消息', true);
+    return;
+  }
+
+  await Promise.all(keysToDelete.map(k => messagesRef.child(k).remove()));
+  await sendAIMessage();
+}
+
+// ================================================================
+//  AI Summary + Export Chat
+// ================================================================
+
+function getSubApi(config) {
+  return {
+    baseUrl: config.subApiBaseUrl?.trim() || config.apiBaseUrl,
+    apiKey:  config.subApiKey?.trim()     || config.apiKey,
+    model:   config.subModelName?.trim()  || config.modelName || 'gpt-4o',
+  };
+}
+
+async function generateSummary() {
+  const config = getConfig();
+  if (!config || !config.apiKey || !config.apiBaseUrl) {
+    showNotice('请先完成 API 设置并保存', true);
+    return;
+  }
+  if (!messagesRef) {
+    showNotice('请先配置 Firebase 并保存设置', true);
+    return;
+  }
+
+  const btn = document.getElementById('btn-generate-summary');
+  btn.classList.add('loading');
+  btn.textContent = '生成中...';
+
+  try {
+    const snap = await messagesRef.orderByChild('timestamp').once('value');
+    const lines = [];
+    snap.forEach(child => {
+      const m = child.val();
+      lines.push(`[${m.sender}]: ${m.content}`);
+    });
+
+    if (lines.length === 0) {
+      showNotice('没有聊天记录可以摘要', true);
+      return;
+    }
+
+    const defaultSummaryPrompt = '你是一个剧情总结助手。请将以下聊天记录总结为简洁的记忆摘要，要求：\n1. 保留所有关键事件和转折点\n2. 记录人物关系的变化\n3. 记录重要的情节发展\n4. 以第三人称视角描述\n5. 控制在 500-1000 字以内';
+    const customPrompt = config.summaryPrompt?.trim();
+    const summarySystemPrompt = customPrompt || defaultSummaryPrompt;
+
+    const sub = getSubApi(config);
+    const chatUrl = getChatUrl(sub.baseUrl);
+    const resp = await fetch(chatUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sub.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: sub.model,
+        stream: false,
+        messages: [
+          { role: 'system', content: summarySystemPrompt },
+          { role: 'user', content: '以下是需要总结的聊天记录：\n\n' + lines.join('\n') },
+        ],
+      }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`API Error ${resp.status}: ${errText}`);
+    }
+
+    const data = await resp.json();
+    const summary = data.choices?.[0]?.message?.content || '';
+    if (summary) {
+      document.getElementById('cfg-memorySummary').value = summary;
+      showNotice('摘要已生成，请检查后保存设置');
+    } else {
+      showNotice('API 返回了空内容', true);
+    }
+  } catch (e) {
+    showNotice('摘要生成失败: ' + e.message, true);
+  } finally {
+    btn.classList.remove('loading');
+    btn.textContent = 'AI 生成摘要';
+  }
+}
+
+async function exportChat() {
+  if (!messagesRef) {
+    showNotice('请先连接到房间', true);
+    return;
+  }
+
+  const snap = await messagesRef.orderByChild('timestamp').once('value');
+  const lines = [];
+  snap.forEach(child => {
+    const m = child.val();
+    const time = m.timestamp ? new Date(m.timestamp).toLocaleString('zh-CN') : '';
+    lines.push(`[${time}] [${m.sender}]:\n${m.content}\n`);
+  });
+
+  if (lines.length === 0) {
+    showNotice('没有消息可以导出', true);
+    return;
+  }
+
+  const config = getConfig();
+  const roomId = config?.roomId || 'unknown';
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `rp_chat_${roomId}_${Date.now()}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showNotice('聊天记录已导出');
+}
+
+async function clearChat() {
+  if (!messagesRef) {
+    showNotice('请先连接到房间', true);
+    return;
+  }
+  if (!confirm('确定要清除全部聊天记录吗？此操作不可撤销。')) return;
+  try {
+    await messagesRef.remove();
+    showNotice('聊天记录已清除');
+  } catch (e) {
+    showNotice('清除失败: ' + e.message, true);
+  }
+}
+
+// ===== Fetch models =====
+async function fetchModelsFor({ baseUrlId, apiKeyId, btnId, selectId, modelInputId }) {
+  const baseUrl = document.getElementById(baseUrlId).value.trim();
+  const apiKey = document.getElementById(apiKeyId).value.trim();
+  if (!baseUrl || !apiKey) {
+    showNotice('请先填写对应的 API Base URL 和 API Key', true);
+    return;
+  }
+
+  let modelsUrl;
+  try {
+    const u = new URL(baseUrl);
+    const parts = u.pathname.replace(/\/+$/, '').split('/');
+    const vIdx = parts.findIndex(p => /^v\d+/.test(p));
+    if (vIdx !== -1) {
+      modelsUrl = u.origin + parts.slice(0, vIdx + 1).join('/') + '/models';
+    } else {
+      modelsUrl = u.origin + '/models';
+    }
+  } catch {
+    showNotice('无效的 API Base URL', true);
+    return;
+  }
+
+  const btn = document.getElementById(btnId);
+  btn.classList.add('loading');
+  btn.textContent = '...';
+
+  try {
+    const resp = await fetch(modelsUrl, {
+      headers: { 'Authorization': `Bearer ${apiKey}` }
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    const models = (data.data || []).map(m => m.id).sort();
+    if (models.length === 0) {
+      showNotice('API 返回了空的模型列表', true);
+      return;
+    }
+
+    const select = document.getElementById(selectId);
+    select.innerHTML = '<option value="">-- 选择模型 --</option>';
+    for (const id of models) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = id;
+      select.appendChild(opt);
+    }
+
+    const current = document.getElementById(modelInputId).value.trim();
+    if (current && models.includes(current)) select.value = current;
+
+    select.style.display = '';
+    showNotice(`已加载 ${models.length} 个模型`);
+  } catch (e) {
+    showNotice('加载模型失败: ' + e.message, true);
+  } finally {
+    btn.classList.remove('loading');
+    btn.textContent = '加载';
+  }
+}
+
+const mainModelOpts = { baseUrlId: 'cfg-apiBaseUrl', apiKeyId: 'cfg-apiKey', btnId: 'btn-fetch-models', selectId: 'cfg-modelSelect', modelInputId: 'cfg-modelName' };
+const subModelOpts  = { baseUrlId: 'cfg-subApiBaseUrl', apiKeyId: 'cfg-subApiKey', btnId: 'btn-fetch-sub-models', selectId: 'cfg-subModelSelect', modelInputId: 'cfg-subModelName' };
+
+document.getElementById('cfg-modelSelect').addEventListener('change', (e) => {
+  if (e.target.value) document.getElementById('cfg-modelName').value = e.target.value;
+});
+document.getElementById('cfg-subModelSelect').addEventListener('change', (e) => {
+  if (e.target.value) document.getElementById('cfg-subModelName').value = e.target.value;
+});
+
+document.getElementById('btn-fetch-models').addEventListener('click', () => fetchModelsFor(mainModelOpts));
+document.getElementById('btn-fetch-sub-models').addEventListener('click', () => fetchModelsFor(subModelOpts));
+
+// ===== Input auto-resize + send button state =====
+const msgInputEl = document.getElementById('msg-input');
+const sendBtnEl = document.getElementById('btn-send');
+
+function autoResizeInput() {
+  msgInputEl.style.height = 'auto';
+  const h = Math.min(msgInputEl.scrollHeight, 140);
+  msgInputEl.style.height = h + 'px';
+}
+
+function updateSendButtonState() {
+  if (msgInputEl.value.trim()) sendBtnEl.classList.add('has-text');
+  else sendBtnEl.classList.remove('has-text');
+}
+
+msgInputEl.addEventListener('input', () => {
+  autoResizeInput();
+  updateSendButtonState();
+});
+
+sendBtnEl.addEventListener('click', () => {
+  if (isGenerating) {
+    currentAbortController?.abort();
+    return;
+  }
+  if (msgInputEl.value.trim()) sendHumanMessage();
+  else sendAIMessage();
+});
+
+// ===== Scroll-to-bottom button =====
+const messagesScrollEl = document.getElementById('messages');
+const scrollBottomBtn = document.getElementById('scroll-bottom');
+
+messagesScrollEl.addEventListener('scroll', () => {
+  const distFromBottom = messagesScrollEl.scrollHeight - messagesScrollEl.scrollTop - messagesScrollEl.clientHeight;
+  scrollBottomBtn.classList.toggle('visible', distFromBottom > 200);
+});
+
+scrollBottomBtn.addEventListener('click', () => {
+  messagesScrollEl.scrollTo({ top: messagesScrollEl.scrollHeight, behavior: 'smooth' });
+});
+
+// ===== Avatar preview helpers =====
+function hashHue(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
+  return Math.abs(h) % 360;
+}
+
+function setAvatarPreview(wrapId, url, fallbackChar) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  const img = wrap.querySelector('.avatar-preview-img');
+  const fb = wrap.querySelector('.avatar-preview-fallback');
+
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    img.onload = () => { wrap.classList.add('has-image'); };
+    img.onerror = () => {
+      img.src = '';
+      wrap.classList.remove('has-image');
+      _applyAvatarFallback(wrap, fb, fallbackChar);
+    };
+    img.src = url;
+  } else {
+    img.src = '';
+    wrap.classList.remove('has-image');
+    _applyAvatarFallback(wrap, fb, fallbackChar);
+  }
+}
+
+function _applyAvatarFallback(wrap, fb, char) {
+  const c = char ? [...char][0].toUpperCase() : '?';
+  const hue = hashHue(c);
+  wrap.style.background = `hsl(${hue}, 42%, 52%)`;
+  fb.textContent = c;
+}
+
+document.getElementById('cfg-char1-avatarUrl').addEventListener('input', (e) => {
+  const charName = document.getElementById('cfg-char1-name').value.trim() || '?';
+  setAvatarPreview('preview-char1', e.target.value.trim(), charName);
+});
+
+document.getElementById('cfg-char2-avatarUrl').addEventListener('input', (e) => {
+  const charName = document.getElementById('cfg-char2-name').value.trim() || '?';
+  setAvatarPreview('preview-char2', e.target.value.trim(), charName);
+});
+
+document.getElementById('cfg-userAvatarUrl').addEventListener('input', (e) => {
+  const uname = document.getElementById('cfg-username').value.trim() || '?';
+  setAvatarPreview('preview-user', e.target.value.trim(), uname);
+});
+
+// ===== Event Bindings =====
+document.getElementById('btn-save').addEventListener('click', saveConfig);
+document.getElementById('btn-save-character').addEventListener('click', saveConfig);
+document.getElementById('btn-save-char2').addEventListener('click', saveConfig);
+document.getElementById('btn-save-user').addEventListener('click', saveConfig);
+document.getElementById('btn-load').addEventListener('click', () => {
+  if (loadConfig()) {
+    showNotice('设置已加载');
+    initFirebase();
+  } else {
+    showNotice('没有已保存的设置', true);
+  }
+});
+document.getElementById('btn-export').addEventListener('click', exportConfig);
+document.getElementById('btn-import').addEventListener('click', importConfig);
+document.getElementById('import-file-input').addEventListener('change', handleImportFile);
+
+// Enter to send (Shift+Enter = newline, IME-safe)
+msgInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    sendHumanMessage();
+  }
+});
+
+// More sheet action buttons — close sheet then dispatch
+document.getElementById('btn-regenerate').addEventListener('click', () => {
+  closeMoreSheet();
+  regenerate();
+});
+document.getElementById('btn-export-chat').addEventListener('click', () => {
+  closeMoreSheet();
+  exportChat();
+});
+
+document.getElementById('btn-generate-summary').addEventListener('click', generateSummary);
+document.getElementById('btn-clear-chat').addEventListener('click', clearChat);
+
+// ===== Auto-load on page open =====
+document.addEventListener('DOMContentLoaded', () => {
+  const config = loadConfig();
+  if (config) initFirebase(config);
+  updateSendButtonState();
+});
+</script>
+
+</body>
+</html>
