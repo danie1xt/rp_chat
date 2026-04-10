@@ -1134,6 +1134,112 @@ body.sheet-open #main {
   animation: msg-collapse .28s var(--ease-ios) forwards;
 }
 
+/* ===== Batch-select mode ===== */
+#chat-area.select-mode .msg-row {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#chat-area.select-mode .msg-row .bubble {
+  pointer-events: none;          /* clicks go to row, not bubble */
+}
+/* Selection check circle */
+.msg-row .select-check {
+  display: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--text-4);
+  background: var(--bg);
+  flex-shrink: 0;
+  transition: background var(--dur-fast) var(--ease-ios),
+              border-color var(--dur-fast) var(--ease-ios),
+              transform var(--dur-fast) var(--ease-ios);
+}
+.msg-row.incoming .select-check { left: -32px; }
+.msg-row.outgoing .select-check { right: -32px; }
+
+#chat-area.select-mode .msg-row { position: relative; }
+#chat-area.select-mode .msg-row .select-check { display: block; }
+#chat-area.select-mode .msg-row.incoming { padding-left: 34px; }
+#chat-area.select-mode .msg-row.outgoing { padding-right: 34px; }
+
+.msg-row.selected .select-check {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: translateY(-50%) scale(1.08);
+}
+.msg-row.selected .select-check::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 7px;
+  width: 5px;
+  height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Selection toolbar (replaces input-area) */
+#select-toolbar {
+  display: none;
+  position: relative;
+  padding: 10px max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-top: 1px solid var(--separator);
+  flex-shrink: 0;
+}
+#select-toolbar.active { display: block; }
+#select-toolbar-inner {
+  max-width: var(--chat-max);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#select-toolbar .select-count {
+  font-size: 15px;
+  font-weight: 500;
+  font-variation-settings: "wght" 500;
+  color: var(--text-2);
+}
+#select-toolbar .btn-select-cancel {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 500;
+  font-variation-settings: "wght" 500;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+#select-toolbar .btn-select-cancel:active { opacity: 0.6; }
+#select-toolbar .btn-select-delete {
+  background: var(--danger);
+  border: none;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 550;
+  font-variation-settings: "wght" 550;
+  padding: 8px 20px;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: opacity var(--dur-fast);
+}
+#select-toolbar .btn-select-delete:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+#select-toolbar .btn-select-delete:not(:disabled):active { opacity: 0.75; }
+
 /* Send button flash ring */
 @keyframes send-flash {
   0%   { box-shadow: 0 0 0 0 rgba(0,122,255,0.50); }
@@ -1244,6 +1350,13 @@ body.sheet-open #main {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
           </button>
         </div>
+      </div>
+    </div>
+    <div id="select-toolbar">
+      <div id="select-toolbar-inner">
+        <button class="btn-select-cancel">取消</button>
+        <span class="select-count">已选择 0 条</span>
+        <button class="btn-select-delete" disabled>删除</button>
       </div>
     </div>
   </div>
@@ -1958,6 +2071,11 @@ function renderMessage(msg) {
 
   container.appendChild(bubble);
 
+  // Selection check circle (hidden until select-mode)
+  const check = document.createElement('div');
+  check.className = 'select-check';
+  row.appendChild(check);
+
   if (msg.edited) {
     const edited = document.createElement('div');
     edited.className = 'msg-edited';
@@ -1969,6 +2087,12 @@ function renderMessage(msg) {
   if (!isOwn) applyAvatarToRow(row, msg);
 
   setupBubbleInteraction(row);
+
+  // If select mode is active, wire up selection on new rows
+  if (selectionMode) {
+    row._selectHandler = () => toggleSelect(row);
+    row.addEventListener('click', row._selectHandler);
+  }
 
   const inner = document.getElementById('messages-inner');
   inner.appendChild(row);
@@ -2085,6 +2209,7 @@ function setupBubbleInteraction(el) {
 }
 
 function showCtxMenu(rowEl) {
+  if (selectionMode) return;   // suppress ctx menu during batch-select
   dismissCtxMenu();
 
   const msg = rowEl._msgData;
@@ -2135,7 +2260,7 @@ function showCtxMenu(rowEl) {
     addSep();
     addItem('编辑', '', () => startEdit(rowEl));
     addSep();
-    addItem('删除', 'danger', () => deleteMessage(msg.id));
+    addItem('删除', 'danger', () => enterSelectMode(rowEl));
   }
 
   document.body.appendChild(menu);
@@ -2243,15 +2368,97 @@ function cancelReply() {
 
 document.querySelector('#reply-bar .reply-close').addEventListener('click', cancelReply);
 
-// ----- Delete message -----
-async function deleteMessage(id) {
-  if (!messagesRef || !id) return;
-  try {
-    await messagesRef.child(id).remove();
-  } catch (e) {
-    showNotice('删除失败: ' + e.message, true);
-  }
+// ================================================================
+//  Batch select & delete
+// ================================================================
+
+let selectionMode = false;
+const selectedIds = new Set();
+
+function enterSelectMode(initialRow) {
+  selectionMode = true;
+  const chatArea = document.getElementById('chat-area');
+  chatArea.classList.add('select-mode');
+
+  document.getElementById('input-area').style.display = 'none';
+  document.getElementById('select-toolbar').classList.add('active');
+
+  // Auto-select the initial row
+  if (initialRow) toggleSelect(initialRow);
+
+  // Attach click listeners to all rows
+  document.querySelectorAll('#messages-inner .msg-row').forEach(row => {
+    row._selectHandler = () => toggleSelect(row);
+    row.addEventListener('click', row._selectHandler);
+  });
 }
+
+function exitSelectMode() {
+  selectionMode = false;
+  selectedIds.clear();
+  const chatArea = document.getElementById('chat-area');
+  chatArea.classList.remove('select-mode');
+
+  document.getElementById('input-area').style.display = '';
+  document.getElementById('select-toolbar').classList.remove('active');
+
+  document.querySelectorAll('#messages-inner .msg-row').forEach(row => {
+    row.classList.remove('selected');
+    if (row._selectHandler) {
+      row.removeEventListener('click', row._selectHandler);
+      delete row._selectHandler;
+    }
+  });
+
+  updateSelectCount();
+}
+
+function toggleSelect(row) {
+  const id = row.dataset.id;
+  if (!id) return;
+
+  // Only allow selecting own messages
+  const config = getConfig();
+  const msg = row._msgData;
+  if (!config || !msg || msg.owner !== config.username) return;
+
+  if (selectedIds.has(id)) {
+    selectedIds.delete(id);
+    row.classList.remove('selected');
+  } else {
+    selectedIds.add(id);
+    row.classList.add('selected');
+  }
+  updateSelectCount();
+}
+
+function updateSelectCount() {
+  const n = selectedIds.size;
+  const toolbar = document.getElementById('select-toolbar');
+  toolbar.querySelector('.select-count').textContent = `已选择 ${n} 条`;
+  toolbar.querySelector('.btn-select-delete').disabled = n === 0;
+}
+
+async function batchDelete() {
+  if (!messagesRef || selectedIds.size === 0) return;
+  const ids = [...selectedIds];
+  exitSelectMode();
+  const errors = [];
+  for (const id of ids) {
+    try {
+      await messagesRef.child(id).remove();
+    } catch (e) {
+      errors.push(id);
+    }
+  }
+  if (errors.length) showNotice(`${errors.length} 条删除失败`, true);
+}
+
+// Wire up toolbar buttons
+document.getElementById('select-toolbar').querySelector('.btn-select-cancel')
+  .addEventListener('click', exitSelectMode);
+document.getElementById('select-toolbar').querySelector('.btn-select-delete')
+  .addEventListener('click', batchDelete);
 
 // ================================================================
 //  Firebase
@@ -2904,14 +3111,34 @@ async function sendGroupReply(config, char1, char2) {
       .filter(p => p.length > 0);
 
     for (let i = 0; i < parts.length; i++) {
+      let part = parts[i];
+      let replyToData = null;
+
+      const replyMatch = part.match(/^\[REPLY:#([^\]]+)\]\s*/i);
+      if (replyMatch) {
+        const quotedId = replyMatch[1].trim();
+        part = part.slice(replyMatch[0].length).trim();
+        const quotedMsg = recentMsgs.find(m => m.id === quotedId);
+        if (quotedMsg) {
+          replyToData = {
+            id: quotedMsg.id,
+            sender: quotedMsg.sender,
+            content: quotedMsg.content.slice(0, 200),
+          };
+        }
+      }
+
+      if (!part) continue;
       const msgId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      await messagesRef.child(msgId).set({
+      const msgData = {
         sender: activeChar,
         senderType: 'ai',
         owner: config.username,
-        content: parts[i],
+        content: part,
         timestamp: firebase.database.ServerValue.TIMESTAMP,
-      });
+      };
+      if (replyToData) msgData.replyTo = replyToData;
+      await messagesRef.child(msgId).set(msgData);
       if (i < parts.length - 1) await new Promise(r => setTimeout(r, 50));
     }
   }
