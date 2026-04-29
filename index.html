@@ -131,7 +131,31 @@ button, input, textarea, select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity var(--dur-fast);
 }
+#room-label:hover { opacity: 0.6; }
+
+#room-name-input {
+  display: none;
+  pointer-events: auto;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid var(--accent);
+  font-size: 15px;
+  font-weight: 600;
+  font-variation-settings: "wght" 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  text-align: center;
+  outline: none;
+  width: 160px;
+  max-width: 55vw;
+  padding: 1px 4px;
+  line-height: 1.15;
+}
+#room-name-input.active { display: block; }
 
 #connection-status {
   display: inline-flex;
@@ -256,6 +280,84 @@ body.sheet-open #main {
 }
 .msg-row.incoming.group-start .msg-sender,
 .msg-row.incoming.group-solo .msg-sender { display: block; }
+
+/* Admin badge in sender label */
+.admin-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  font-variation-settings: "wght" 600;
+  color: var(--warn);
+  background: rgba(255,149,0,0.13);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-left: 5px;
+  vertical-align: middle;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+}
+/* Title badge in sender label */
+.title-badge {
+  font-size: 10px;
+  font-weight: 400;
+  font-variation-settings: "wght" 400;
+  color: var(--text-3);
+  margin-left: 5px;
+  letter-spacing: 0;
+}
+
+/* Admin management — member rows */
+.member-admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 0.5px solid var(--separator);
+}
+.member-admin-row:last-child { border-bottom: none; }
+.member-admin-name {
+  font-size: 15px;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.member-type-tag {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-left: 5px;
+  flex-shrink: 0;
+}
+/* iOS-style toggle switch */
+.ios-toggle {
+  flex-shrink: 0;
+  width: 51px;
+  height: 31px;
+  background: var(--separator-opaque);
+  border-radius: 15.5px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background var(--dur-base) var(--ease-ios);
+  outline: none;
+  margin-left: 12px;
+}
+.ios-toggle.on { background: var(--success); }
+.ios-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.22);
+  transition: transform var(--dur-base) var(--ease-ios);
+}
+.ios-toggle.on::after { transform: translateX(20px); }
 
 /* Bubble */
 .bubble {
@@ -1310,6 +1412,7 @@ body.sheet-open #main {
   <div class="left"></div>
   <div class="center">
     <span id="room-label">RP Group Chat</span>
+    <input type="text" id="room-name-input" maxlength="20" placeholder="群名">
     <span id="connection-status">未连接</span>
   </div>
   <div class="right">
@@ -1384,6 +1487,13 @@ body.sheet-open #main {
         <div>
           <label class="field-label">房间 ID</label>
           <input type="text" class="field-input" id="cfg-roomId" placeholder="两人填相同的房间ID">
+        </div>
+        <div>
+          <label class="field-label">群名（存 Firebase，AI 可见）</label>
+          <div class="inline-row">
+            <input type="text" class="field-input" id="cfg-roomName" placeholder="留空则显示房间ID" maxlength="20" style="flex:1;">
+            <button class="btn-mini" id="btn-save-room-name">保存</button>
+          </div>
         </div>
         <div>
           <label class="field-label">API Base URL</label>
@@ -1606,14 +1716,16 @@ body.sheet-open #main {
 <div id="sheet-group" class="sheet" role="dialog" aria-modal="true">
   <div class="sheet-grabber"></div>
   <div class="sheet-header">
-    <span style="font-size:16px;font-weight:600;font-variation-settings:'wght' 600;flex:1;letter-spacing:-0.01em;">群聊</span>
+    <span style="font-size:16px;font-weight:600;font-variation-settings:'wght' 600;flex:1;letter-spacing:-0.01em;">群管理</span>
     <button class="sheet-close" aria-label="关闭">&times;</button>
   </div>
   <div class="sheet-body">
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:48px 0;text-align:center;">
-      <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      <p style="font-size:17px;font-weight:600;font-variation-settings:'wght' 600;color:var(--text);">群聊功能</p>
-      <p style="font-size:14px;color:var(--text-3);line-height:1.5;max-width:240px;">即将推出：跨房间群聊、成员列表、邀请码…</p>
+    <div style="display:flex;flex-direction:column;gap:18px;">
+      <div class="section-label">成员与管理员</div>
+      <div id="admin-member-list" class="ios-group">
+        <div style="padding:16px;text-align:center;color:var(--text-3);font-size:14px;">连接 Firebase 后自动显示群成员</div>
+      </div>
+      <p style="font-size:12px;color:var(--text-3);padding:0 4px;line-height:1.55;">管理员可使用禁言、设置头衔等功能。AI 角色成为管理员后才会获得对应的操作权限。</p>
     </div>
   </div>
 </div><!-- /sheet-group -->
@@ -1889,7 +2001,7 @@ function handleImportFile(e) {
 
 // ===== Helpers =====
 function updateRoomLabel(roomId) {
-  document.getElementById('room-label').textContent = roomId ? roomId : 'RP Group Chat';
+  document.getElementById('room-label').textContent = roomMeta.roomName || roomId || 'RP Group Chat';
 }
 
 function setConnectionStatus(status) {
@@ -2005,6 +2117,10 @@ function recomputeLayout() {
 }
 
 // ===== Render message bubble =====
+function getDisplayName(senderName) {
+  return roomMeta.nicknames?.[senderName] || senderName;
+}
+
 function renderMessage(msg) {
   const config = getConfig();
   const isOwn = config && msg.senderType === 'human' && msg.owner === config.username;
@@ -2033,7 +2149,19 @@ function renderMessage(msg) {
 
   const sender = document.createElement('div');
   sender.className = 'msg-sender';
-  sender.textContent = msg.sender;
+  sender.textContent = getDisplayName(msg.sender);
+  if (roomMeta.admins?.[msg.sender]) {
+    const badge = document.createElement('span');
+    badge.className = 'admin-badge';
+    badge.textContent = '管理员';
+    sender.appendChild(badge);
+  }
+  if (roomMeta.titles?.[msg.sender]) {
+    const titleBadge = document.createElement('span');
+    titleBadge.className = 'title-badge';
+    titleBadge.textContent = roomMeta.titles[msg.sender];
+    sender.appendChild(titleBadge);
+  }
   container.appendChild(sender);
 
   const bubble = document.createElement('div');
@@ -2044,7 +2172,7 @@ function renderMessage(msg) {
     quote.className = 'msg-reply-quote';
     const quoteSender = document.createElement('span');
     quoteSender.className = 'reply-quote-sender';
-    quoteSender.textContent = msg.replyTo.sender + ': ';
+    quoteSender.textContent = getDisplayName(msg.replyTo.sender) + ': ';
     const preview = msg.replyTo.content.replace(/\n/g, ' ');
     const quoteText = document.createTextNode(
       preview.length > 24 ? preview.slice(0, 24) + '…' : preview
@@ -2256,6 +2384,22 @@ function showCtxMenu(rowEl) {
       () => showNotice('复制失败', true)
     );
   });
+  // Admin: set title for this sender
+  if (!isOwn && config && roomMeta.admins?.[config.username] && msg.sender) {
+    addSep();
+    addItem('设置头衔', '', () => {
+      const current = roomMeta.titles?.[msg.sender] || '';
+      const newTitle = prompt(`给「${msg.sender}」设置群头衔（留空移除）：`, current);
+      if (newTitle === null) return; // cancelled
+      if (!config.roomId || !db) { showNotice('请先连接 Firebase', true); return; }
+      const trimmed = newTitle.trim().slice(0, 10);
+      if (trimmed) {
+        db.ref(`rooms/${config.roomId}/titles/${msg.sender}`).set(trimmed);
+      } else {
+        db.ref(`rooms/${config.roomId}/titles/${msg.sender}`).remove();
+      }
+    });
+  }
   if (isOwn) {
     addSep();
     addItem('编辑', '', () => startEdit(rowEl));
@@ -2468,10 +2612,15 @@ let firebaseApp = null;
 let db = null;
 let messagesRef = null;
 let profilesRef = null;
+let metaRef = null;
+let nicknamesRef = null;
+let titlesRef = null;
+let mutedRef = null;
 let currentListener = null;
 let renderedIds = new Set();
 let initialLoadComplete = false;
 let profilesByOwner = {};
+let roomMeta = { roomName: '', admins: {}, nicknames: {}, titles: {}, muted: {} };
 
 function getConfig() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -2563,7 +2712,12 @@ function initFirebase(config) {
     profilesRef.off('value');
     profilesRef = null;
   }
+  if (metaRef)      { metaRef.off('value');      metaRef = null; }
+  if (nicknamesRef) { nicknamesRef.off('value');  nicknamesRef = null; }
+  if (titlesRef)    { titlesRef.off('value');     titlesRef = null; }
+  if (mutedRef)     { mutedRef.off('value');      mutedRef = null; }
   profilesByOwner = {};
+  roomMeta = { roomName: '', admins: {}, nicknames: {}, titles: {}, muted: {} };
 
   if (firebaseApp) {
     try { firebaseApp.delete(); } catch {}
@@ -2595,6 +2749,7 @@ function initFirebase(config) {
   profilesRef.on('value', (snap) => {
     profilesByOwner = snap.val() || {};
     refreshAllAvatars();
+    updateAdminUI();
   });
 
   messagesRef = db.ref(`rooms/${roomId}/messages`);
@@ -2631,7 +2786,40 @@ function initFirebase(config) {
   messagesRef.on('child_changed', onChanged);
 
   currentListener = { onAdded, onRemoved, onChanged };
-  updateRoomLabel(roomId);
+
+  // Group meta listeners (Phase 1)
+  metaRef = db.ref(`rooms/${roomId}/meta`);
+  metaRef.on('value', (snap) => {
+    const val = snap.val() || {};
+    roomMeta.roomName = val.roomName || '';
+    roomMeta.admins   = val.admins   || {};
+    updateRoomLabel(roomId);
+    const cfgRoomNameEl = document.getElementById('cfg-roomName');
+    if (cfgRoomNameEl) cfgRoomNameEl.value = roomMeta.roomName;
+    updateAdminUI();
+    updateAllSenderLabels();
+  });
+
+  nicknamesRef = db.ref(`rooms/${roomId}/nicknames`);
+  nicknamesRef.on('value', (snap) => {
+    roomMeta.nicknames = snap.val() || {};
+    updateAllSenderLabels();
+    updateAdminUI();
+  });
+
+  titlesRef = db.ref(`rooms/${roomId}/titles`);
+  titlesRef.on('value', (snap) => {
+    roomMeta.titles = snap.val() || {};
+    updateAllSenderLabels();
+    updateAdminUI();
+  });
+
+  mutedRef = db.ref(`rooms/${roomId}/muted`);
+  mutedRef.on('value', (snap) => {
+    roomMeta.muted = snap.val() || {};
+    updateMuteUI();
+    updateAdminUI();
+  });
 }
 
 function sendHumanMessage() {
@@ -2648,6 +2836,10 @@ function sendHumanMessage() {
   const input = document.getElementById('msg-input');
   const text = input.value.trim();
   if (!text) return;
+  if (roomMeta.muted?.[config.username]) {
+    showNotice('你已被禁言', true);
+    return;
+  }
 
   // Send feedback
   navigator.vibrate?.(8);
@@ -2692,6 +2884,276 @@ let currentAbortController = null;
 const SEND_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 const STOP_ICON_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>';
 
+// 解析结构化消息标签，返回 [{ sender, content }] 数组
+// 支持格式：[角色名的消息：内容] 每条占一行，结束标记 [END]
+function parseStructuredMessages(fullText, knownCharNames) {
+  const messages = [];
+  let currentSender = null;
+  let currentContent = '';
+
+  const TAG_OPEN_RE = /^\[(.+?)的消息[：:]\s*/;
+
+  for (const rawLine of fullText.split('\n')) {
+    const trimmed = rawLine.trim();
+
+    if (/^\[END\]$/i.test(trimmed)) {
+      if (currentSender && currentContent.trim()) {
+        messages.push({ sender: currentSender, content: currentContent.trim() });
+      }
+      break;
+    }
+
+    const tagMatch = trimmed.match(TAG_OPEN_RE);
+    if (tagMatch) {
+      if (currentSender && currentContent.trim()) {
+        messages.push({ sender: currentSender, content: currentContent.trim() });
+      }
+      currentSender = tagMatch[1].trim();
+      // 去掉行尾的 ] （单行消息）
+      currentContent = trimmed.slice(tagMatch[0].length).replace(/\]$/, '');
+      continue;
+    }
+
+    if (currentSender) {
+      currentContent += (currentContent ? '\n' : '') + rawLine;
+    }
+  }
+
+  // 兜底：流结束但没有 [END]
+  if (currentSender && currentContent.trim()) {
+    messages.push({ sender: currentSender, content: currentContent.trim() });
+  }
+
+  // 如果指定了 knownCharNames，过滤掉不在列表里的 sender
+  if (knownCharNames && knownCharNames.length > 0) {
+    return messages.filter(m => knownCharNames.includes(m.sender));
+  }
+  return messages;
+}
+
+function buildGroupInfoSection(config, charName) {
+  const roomId = config.roomId || '';
+  const roomName = roomMeta.roomName || roomId;
+  const adminList = Object.keys(roomMeta.admins || {});
+  const mutedList = Object.keys(roomMeta.muted || {});
+
+  const members = [];
+  for (const profile of Object.values(profilesByOwner)) {
+    if (profile.username) members.push(profile.username);
+    for (const c of (profile.characters || [])) {
+      if (c.name) members.push(c.name);
+    }
+  }
+
+  let s = `## 群信息\n`;
+  s += `- 群名：${roomName}\n`;
+  if (members.length > 0) s += `- 群成员：${members.join('、')}\n`;
+  s += `- 管理员：${adminList.length > 0 ? adminList.join('、') : '无'}\n`;
+  s += `- 被禁言：${mutedList.length > 0 ? mutedList.join('、') : '无'}\n`;
+  if (charName) {
+    s += `- 你的群昵称：${roomMeta.nicknames?.[charName] || '无'}\n`;
+    s += `- 你的群头衔：${roomMeta.titles?.[charName] || '无'}\n`;
+  }
+  s += '\n';
+  return s;
+}
+
+function getAllKnownMembers() {
+  const members = [];
+  for (const [owner, profile] of Object.entries(profilesByOwner)) {
+    if (profile.username) {
+      members.push({ name: profile.username, type: 'user', owner });
+    }
+    for (const c of (profile.characters || [])) {
+      if (c.name?.trim()) {
+        members.push({ name: c.name.trim(), type: 'ai', owner });
+      }
+    }
+  }
+  return members;
+}
+
+function updateAllSenderLabels() {
+  document.querySelectorAll('#messages-inner .msg-row.incoming').forEach(row => {
+    const senderEl = row.querySelector('.msg-sender');
+    if (!senderEl || !row._msgData) return;
+    const senderName = row._msgData.sender;
+    senderEl.textContent = getDisplayName(senderName);
+    if (roomMeta.admins?.[senderName]) {
+      const badge = document.createElement('span');
+      badge.className = 'admin-badge';
+      badge.textContent = '管理员';
+      senderEl.appendChild(badge);
+    }
+    if (roomMeta.titles?.[senderName]) {
+      const titleBadge = document.createElement('span');
+      titleBadge.className = 'title-badge';
+      titleBadge.textContent = roomMeta.titles[senderName];
+      senderEl.appendChild(titleBadge);
+    }
+  });
+  // Also update reply quotes
+  document.querySelectorAll('#messages-inner .reply-quote-sender').forEach(el => {
+    const row = el.closest('.msg-row');
+    if (!row?._msgData?.replyTo) return;
+    el.textContent = getDisplayName(row._msgData.replyTo.sender) + ': ';
+  });
+}
+
+function updateMuteUI() {
+  const config = getConfig();
+  if (!config?.username) return;
+  const isMuted = !!roomMeta.muted?.[config.username];
+  const input = document.getElementById('msg-input');
+  const sendBtn = document.getElementById('btn-send');
+  if (input) {
+    input.disabled = isMuted;
+    input.placeholder = isMuted ? '你已被禁言' : 'iMessage';
+  }
+  if (sendBtn && !isGenerating) {
+    sendBtn.disabled = isMuted;
+    sendBtn.style.opacity = isMuted ? '0.4' : '';
+  }
+}
+
+function updateAdminUI() {
+  const list = document.getElementById('admin-member-list');
+  if (!list) return;
+
+  const members = getAllKnownMembers();
+  if (members.length === 0) {
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-3);font-size:14px;">连接 Firebase 后自动显示群成员</div>';
+    return;
+  }
+
+  const config = getConfig();
+  const iAmAdmin = !!roomMeta.admins?.[config?.username];
+
+  list.innerHTML = '';
+  for (const m of members) {
+    const row = document.createElement('div');
+    row.className = 'member-admin-row';
+    row.style.cssText = 'flex-wrap:wrap;';
+
+    // Top line: name + type tag + admin toggle
+    const topLine = document.createElement('div');
+    topLine.style.cssText = 'display:flex;align-items:center;width:100%;';
+
+    const nameWrap = document.createElement('div');
+    nameWrap.style.cssText = 'display:flex;align-items:center;flex:1;min-width:0;';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'member-admin-name';
+    nameEl.textContent = m.name;
+    nameWrap.appendChild(nameEl);
+
+    const typeTag = document.createElement('span');
+    typeTag.className = 'member-type-tag';
+    typeTag.textContent = m.type === 'ai' ? 'AI' : '用户';
+    nameWrap.appendChild(typeTag);
+
+    topLine.appendChild(nameWrap);
+
+    const isAdmin = !!roomMeta.admins?.[m.name];
+    const toggle = document.createElement('button');
+    toggle.className = 'ios-toggle' + (isAdmin ? ' on' : '');
+    toggle.setAttribute('aria-label', isAdmin ? '撤销管理员' : '设为管理员');
+
+    toggle.addEventListener('click', async () => {
+      if (!config?.roomId || !db) { showNotice('请先连接 Firebase', true); return; }
+      const currently = !!roomMeta.admins?.[m.name];
+      try {
+        if (currently) {
+          await db.ref(`rooms/${config.roomId}/meta/admins/${m.name}`).remove();
+        } else {
+          await db.ref(`rooms/${config.roomId}/meta/admins/${m.name}`).set(true);
+        }
+      } catch (e) {
+        showNotice('操作失败: ' + e.message, true);
+      }
+    });
+
+    topLine.appendChild(toggle);
+
+    // Mute toggle (admin only)
+    if (iAmAdmin && m.name !== config?.username) {
+      const isMuted = !!roomMeta.muted?.[m.name];
+      const muteBtn = document.createElement('button');
+      muteBtn.style.cssText = `margin-left:6px;padding:2px 8px;font-size:12px;border-radius:6px;border:1px solid ${isMuted ? 'var(--success)' : 'var(--danger)'};background:transparent;color:${isMuted ? 'var(--success)' : 'var(--danger)'};cursor:pointer;flex-shrink:0;`;
+      muteBtn.textContent = isMuted ? '解除禁言' : '禁言';
+      muteBtn.addEventListener('click', async () => {
+        if (!config?.roomId || !db) { showNotice('请先连接 Firebase', true); return; }
+        try {
+          if (isMuted) {
+            await db.ref(`rooms/${config.roomId}/muted/${m.name}`).remove();
+          } else {
+            await db.ref(`rooms/${config.roomId}/muted/${m.name}`).set(true);
+          }
+        } catch (e) { showNotice('操作失败: ' + e.message, true); }
+      });
+      topLine.appendChild(muteBtn);
+    }
+
+    row.appendChild(topLine);
+
+    // Sub line: nickname + title inputs
+    const subLine = document.createElement('div');
+    subLine.style.cssText = 'display:flex;gap:8px;width:100%;margin-top:6px;';
+
+    // Nickname input (self or admin can edit)
+    const canEditNick = (m.name === config?.username) || iAmAdmin;
+    const nickInput = document.createElement('input');
+    nickInput.type = 'text';
+    nickInput.maxLength = 15;
+    nickInput.placeholder = '群昵称';
+    nickInput.value = roomMeta.nicknames?.[m.name] || '';
+    nickInput.style.cssText = 'flex:1;min-width:0;font-size:13px;padding:4px 8px;border:1px solid var(--separator-opaque);border-radius:6px;background:var(--bg);outline:none;';
+    if (!canEditNick) {
+      nickInput.disabled = true;
+      nickInput.style.opacity = '0.5';
+    }
+    nickInput.addEventListener('change', async () => {
+      if (!config?.roomId || !db) return;
+      const val = nickInput.value.trim();
+      try {
+        if (val) {
+          await db.ref(`rooms/${config.roomId}/nicknames/${m.name}`).set(val);
+        } else {
+          await db.ref(`rooms/${config.roomId}/nicknames/${m.name}`).remove();
+        }
+      } catch (e) { showNotice('操作失败: ' + e.message, true); }
+    });
+    subLine.appendChild(nickInput);
+
+    // Title input (admin only)
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.maxLength = 10;
+    titleInput.placeholder = '群头衔';
+    titleInput.value = roomMeta.titles?.[m.name] || '';
+    titleInput.style.cssText = 'flex:1;min-width:0;font-size:13px;padding:4px 8px;border:1px solid var(--separator-opaque);border-radius:6px;background:var(--bg);outline:none;';
+    if (!iAmAdmin) {
+      titleInput.disabled = true;
+      titleInput.style.opacity = '0.5';
+    }
+    titleInput.addEventListener('change', async () => {
+      if (!config?.roomId || !db) return;
+      const val = titleInput.value.trim();
+      try {
+        if (val) {
+          await db.ref(`rooms/${config.roomId}/titles/${m.name}`).set(val);
+        } else {
+          await db.ref(`rooms/${config.roomId}/titles/${m.name}`).remove();
+        }
+      } catch (e) { showNotice('操作失败: ' + e.message, true); }
+    });
+    subLine.appendChild(titleInput);
+
+    row.appendChild(subLine);
+    list.appendChild(row);
+  }
+}
+
 function buildSoloSystemPrompt(config, char) {
   const { memorySummary, userProfile, groupPrompt } = config;
   const characterName = char.name;
@@ -2719,11 +3181,17 @@ function buildSoloSystemPrompt(config, char) {
     s += `## 前文记忆\n以下是之前剧情的摘要，请基于这些信息保持故事连续性：\n${memorySummary}\n\n`;
   }
 
+  s += buildGroupInfoSection(config, char.name);
+
   s += `## 真人感对话规则
-- **像真人发消息一样回复**：语气自然、口语化，符合线上聊天的表达习惯；每次回复发送 **2~4 条消息**，简短自然，不要把所有内容塞进一条长消息里
-- 分段发送：用 \`[SPLIT]\` 标记来分隔每条消息，例如：你好啊[SPLIT]今天怎么样？[SPLIT]我刚吃完饭
-- 引用回复：当你想要单独回应某句话时，在该条消息最开头加上 \`[REPLY:#消息ID]\`（ID 即用户消息格式 \`[用户名 #xxx]\` 中的 \`xxx\` 部分），例如：\`[REPLY:#abc123] 你刚才说的那个...\`；只在需要明确针对某句话回应时才使用，不要每条都加
-- 不要打破第四面墙，不要提及自己是AI`;
+- **像真人发消息一样回复**：语气自然、口语化，符合线上聊天的表达习惯；每次回复发送 **2~5 条消息**，简短自然，不要把所有内容塞进一条长消息里
+- 每条消息必须用以下标签格式单独包裹：\`[${characterName}的消息：{内容}]\`，每条占一行
+- 引用回复：当你想要单独回应某句话时，在内容开头加上 \`[REPLY:#消息ID]\`（ID 即历史消息格式 \`[发送者 #xxx]\` 中的 \`xxx\` 部分），例如：\`[${characterName}的消息：[REPLY:#abc123] 你刚才说的那个...]\`；只在需要明确针对某句话回应时才使用，不要每条都加
+
+示例输出：
+[${characterName}的消息：你猜我今天遇到啥了]
+[${characterName}的消息：超离谱的！]
+[${characterName}的消息：绝对想不到]`;
 
   return s;
 }
@@ -2760,23 +3228,26 @@ function buildGroupSystemPrompt(config) {
     s += `## 前文记忆\n${memorySummary}\n\n`;
   }
 
+  s += buildGroupInfoSection(config, null);
+
   s += `## 发言规则
 - 根据场景自然决定每个角色是否要发言、说什么、说几次；两个角色可以连续说话、互相回应、甚至拌嘴，但必须严格遵守各自的语言风格
-- **像真人发消息一样回复**：语气自然、口语化，符合线上聊天的表达习惯；每个回复发送 **2~4 条消息**，简短自然，不要把所有内容塞进一条长消息里
-- 分段发送：用 \`[SPLIT]\` 标记来分隔每条消息，例如：你好啊[SPLIT]今天怎么样？[SPLIT]我刚吃完饭
-- 引用回复：当你想要单独回应某句话时，在该条消息最开头加上 \`[REPLY:#消息ID]\`（ID 即用户消息格式 \`[用户名 #xxx]\` 中的 \`xxx\` 部分），例如：\`[REPLY:#abc123] 你刚才说的那个...\`；只在需要明确针对某句话回应时才使用，不要每条都加
-- 最多进行 **3次发言轮次**（每个轮次由一个角色完成，可以包含多条 \`[SPLIT]\` 消息）
+- **像真人发消息一样回复**：语气自然、口语化，符合线上聊天的表达习惯；每个角色回复发送 **2~4 条消息**，简短自然，不要把所有内容塞进一条长消息里
+- 每条消息必须用以下标签格式单独包裹：\`[角色名的消息：{内容}]\`，每条占一行
+- 引用回复：当你想要单独回应某句话时，在内容开头加上 \`[REPLY:#消息ID]\`（ID 即历史消息格式 \`[发送者 #xxx]\` 中的 \`xxx\` 部分），例如：\`[${char1.name}的消息：[REPLY:#abc123] 你刚才说的那个...]\`；只在需要明确针对某句话回应时才使用，不要每条都加
+- 最多产出 **8 条消息**（两个角色合计）
+- 全部发言结束后，输出一行 \`[END]\`
+
 
 ## 输出格式（严格遵守）
-每次发言以独占一行的 \`[角色名]\` 开头，紧接台词内容（可跨行，内部用 \`[SPLIT]\` 拆分多条消息）。
-下一次发言再起一行 \`[角色名]\`。
-全部发言结束后，输出一行 \`[END]\`。
+每条消息一行，格式为 \`[角色名的消息：内容]\`，所有消息输出完毕后输出 \`[END]\`。
 
 示例：
-[${char1.name}]
-你猜我今天遇到啥了[SPLIT]超离谱的！[SPLIT]绝对想不到
-[${char2.name}]
-啊？[SPLIT]说来听听
+[${char1.name}的消息：你猜我今天遇到啥了]
+[${char1.name}的消息：超离谱的！]
+[${char2.name}的消息：啊？]
+[${char2.name}的消息：说来听听]
+[${char1.name}的消息：你先猜猜～]
 [END]`;
 
   return s;
@@ -2835,6 +3306,133 @@ async function fetchRecentMessages(count) {
   return msgs;
 }
 
+// ===== Phase 4: Function Calling =====
+const GROUP_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'change_group_name',
+      description: '修改群名',
+      parameters: {
+        type: 'object',
+        properties: {
+          new_name: { type: 'string', description: '新群名' }
+        },
+        required: ['new_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'change_my_nickname',
+      description: '修改自己的群昵称',
+      parameters: {
+        type: 'object',
+        properties: {
+          character: { type: 'string', description: '要改昵称的角色名' },
+          new_nickname: { type: 'string', description: '新昵称' }
+        },
+        required: ['character', 'new_nickname']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_title',
+      description: '给群成员设置群头衔（仅管理员可用）',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', description: '目标成员名' },
+          title:  { type: 'string', description: '头衔内容，空字符串表示移除' }
+        },
+        required: ['target', 'title']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'mute_member',
+      description: '禁言群成员（仅管理员可用）',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', description: '要禁言的成员名' }
+        },
+        required: ['target']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'unmute_member',
+      description: '解除禁言（仅管理员可用）',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', description: '要解除禁言的成员名' }
+        },
+        required: ['target']
+      }
+    }
+  }
+];
+
+function getToolsForChar(charNames) {
+  // charNames: string or array of strings
+  const names = Array.isArray(charNames) ? charNames : [charNames];
+  const base = GROUP_TOOLS.filter(t =>
+    t.function.name === 'change_group_name' || t.function.name === 'change_my_nickname'
+  );
+  const adminOnly = GROUP_TOOLS.filter(t =>
+    t.function.name === 'set_title' || t.function.name === 'mute_member' || t.function.name === 'unmute_member'
+  );
+  const hasAdmin = names.some(n => roomMeta.admins?.[n]);
+  return hasAdmin ? [...base, ...adminOnly] : base;
+}
+
+async function executeToolCalls(toolCalls, roomId) {
+  if (!toolCalls || toolCalls.length === 0) return;
+  const db = firebase.database();
+  for (const tc of toolCalls) {
+    let args;
+    try { args = JSON.parse(tc.arguments); } catch { continue; }
+
+    switch (tc.name) {
+      case 'change_group_name': {
+        const name = (args.new_name || '').slice(0, 20);
+        if (name) await db.ref(`rooms/${roomId}/meta/roomName`).set(name);
+        break;
+      }
+      case 'change_my_nickname': {
+        const charName = args.character || '';
+        const nick = (args.new_nickname || '').slice(0, 15);
+        if (charName && nick) await db.ref(`rooms/${roomId}/nicknames/${charName}`).set(nick);
+        else if (charName && !nick) await db.ref(`rooms/${roomId}/nicknames/${charName}`).remove();
+        break;
+      }
+      case 'set_title': {
+        const title = (args.title || '').slice(0, 10);
+        if (args.target && title) await db.ref(`rooms/${roomId}/titles/${args.target}`).set(title);
+        else if (args.target) await db.ref(`rooms/${roomId}/titles/${args.target}`).remove();
+        break;
+      }
+      case 'mute_member': {
+        if (args.target) await db.ref(`rooms/${roomId}/muted/${args.target}`).set(true);
+        break;
+      }
+      case 'unmute_member': {
+        if (args.target) await db.ref(`rooms/${roomId}/muted/${args.target}`).remove();
+        break;
+      }
+    }
+  }
+}
+
 function getChatUrl(baseUrl) {
   let url = baseUrl.replace(/\/+$/, '');
   if (!url.endsWith('/chat/completions')) {
@@ -2863,6 +3461,7 @@ async function streamRequest(url, apiKey, body, onChunk, onDone, signal) {
   const decoder = new TextDecoder();
   let buffer = '';
   let fullContent = '';
+  let toolCallsAcc = [];
 
   while (true) {
     const { done, value } = await reader.read();
@@ -2878,21 +3477,31 @@ async function streamRequest(url, apiKey, body, onChunk, onDone, signal) {
       const data = trimmed.slice(6);
       if (data === '[DONE]') {
         onDone(fullContent);
-        return fullContent;
+        return { content: fullContent, toolCalls: toolCallsAcc.filter(Boolean) };
       }
       try {
         const parsed = JSON.parse(data);
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) {
-          fullContent += content;
-          onChunk(content, fullContent);
+        const delta = parsed.choices?.[0]?.delta;
+        if (delta?.content) {
+          fullContent += delta.content;
+          onChunk(delta.content, fullContent);
+        }
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            if (tc.id) {
+              toolCallsAcc[tc.index] = { id: tc.id, name: tc.function?.name || '', arguments: '' };
+            }
+            if (tc.function?.arguments && toolCallsAcc[tc.index]) {
+              toolCallsAcc[tc.index].arguments += tc.function.arguments;
+            }
+          }
         }
       } catch {}
     }
   }
 
   onDone(fullContent);
-  return fullContent;
+  return { content: fullContent, toolCalls: toolCallsAcc.filter(Boolean) };
 }
 
 function setGeneratingState(active) {
@@ -2908,10 +3517,15 @@ function setGeneratingState(active) {
   } else {
     sendBtnEl.classList.remove('loading');
     sendBtnEl.innerHTML = SEND_ICON_SVG;
+    updateMuteUI();
   }
 }
 
 async function sendSoloReply(config, char1) {
+  if (roomMeta.muted?.[char1.name]) {
+    showNotice(`${char1.name} 已被禁言`, true);
+    return;
+  }
   setGeneratingState(true);
   const controller = new AbortController();
   currentAbortController = controller;
@@ -2935,7 +3549,14 @@ async function sendSoloReply(config, char1) {
     }
 
     const chatUrl = getChatUrl(config.apiBaseUrl);
-    const requestBody = { model: config.modelName || 'gpt-4o', stream: true, messages: apiMessages };
+    const tools = getToolsForChar(char1.name);
+    const requestBody = {
+      model: config.modelName || 'gpt-4o',
+      stream: true,
+      messages: apiMessages,
+      tools,
+      tool_choice: 'auto',
+    };
 
     tempId = '_streaming_' + Date.now();
     const tempMsg = {
@@ -2953,7 +3574,7 @@ async function sendSoloReply(config, char1) {
     bodyEl.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
 
     let firstChunk = true;
-    const fullContent = await streamRequest(
+    const result = await streamRequest(
       chatUrl,
       config.apiKey,
       requestBody,
@@ -2968,6 +3589,12 @@ async function sendSoloReply(config, char1) {
       (full) => { bodyEl.innerHTML = renderMarkdown(full); },
       controller.signal,
     );
+    const fullContent = result.content;
+
+    // Execute any tool calls
+    if (result.toolCalls.length > 0) {
+      await executeToolCalls(result.toolCalls, config.roomId);
+    }
 
     bubbleEl.remove();
     renderedIds.delete(tempId);
@@ -2975,18 +3602,16 @@ async function sendSoloReply(config, char1) {
     recomputeLayout();
 
     if (fullContent.trim()) {
-      const parts = fullContent.split(/\[SPLIT\]/i)
-        .map(p => p.trim())
-        .filter(p => p.length > 0);
+      const parts = parseStructuredMessages(fullContent, [char1.name]);
 
       for (let i = 0; i < parts.length; i++) {
-        let part = parts[i];
+        let content = parts[i].content;
         let replyToData = null;
 
-        const replyMatch = part.match(/^\[REPLY:#([^\]]+)\]\s*/i);
+        const replyMatch = content.match(/^\[REPLY:#([^\]]+)\]\s*/i);
         if (replyMatch) {
           const quotedId = replyMatch[1].trim();
-          part = part.slice(replyMatch[0].length).trim();
+          content = content.slice(replyMatch[0].length).trim();
           const quotedMsg = recentMsgs.find(m => m.id === quotedId);
           if (quotedMsg) {
             replyToData = {
@@ -2997,13 +3622,13 @@ async function sendSoloReply(config, char1) {
           }
         }
 
-        if (!part) continue;
+        if (!content) continue;
         const msgId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
         const msgData = {
           sender: char1.name,
           senderType: 'ai',
           owner: config.username,
-          content: part,
+          content,
           timestamp: firebase.database.ServerValue.TIMESTAMP,
         };
         if (replyToData) msgData.replyTo = replyToData;
@@ -3021,11 +3646,15 @@ async function sendSoloReply(config, char1) {
 }
 
 async function sendGroupReply(config, char1, char2) {
+  const ownCharNames = [char1.name, char2.name].filter(n => n?.trim());
+  const mutedChars = ownCharNames.filter(n => roomMeta.muted?.[n]);
+  if (mutedChars.length >= ownCharNames.length) {
+    showNotice('所有角色均已被禁言', true);
+    return;
+  }
   setGeneratingState(true);
   const controller = new AbortController();
   currentAbortController = controller;
-
-  const ownCharNames = [char1.name, char2.name].filter(n => n?.trim());
 
   let phase = 'WAITING_TAG'; // WAITING_TAG | IN_CONTENT | DONE
   let activeChar = null;
@@ -3035,6 +3664,7 @@ async function sendGroupReply(config, char1, char2) {
   let tempBubbleBodyEl = null;
   let tempId = null;
   let firstContent = true;
+  let recentMsgs = [];
   // One typing-dot placeholder per char, shown immediately so the user sees
   // "both are about to speak". When a char's tag arrives, their placeholder is
   // promoted into the streaming bubble so there's no flash/reflow.
@@ -3100,75 +3730,70 @@ async function sendGroupReply(config, char1, char2) {
   }
 
   async function flushCurrentBubble() {
-    const content = currentContent.trim();
+    let content = currentContent.trim();
     currentContent = '';
     removeTempBubble();
     recomputeLayout();
     if (!activeChar || !content) return;
+    // Skip muted char's message
+    if (roomMeta.muted?.[activeChar]) return;
 
-    const parts = content.split(/\[SPLIT\]/i)
-      .map(p => p.trim())
-      .filter(p => p.length > 0);
-
-    for (let i = 0; i < parts.length; i++) {
-      let part = parts[i];
-      let replyToData = null;
-
-      const replyMatch = part.match(/^\[REPLY:#([^\]]+)\]\s*/i);
-      if (replyMatch) {
-        const quotedId = replyMatch[1].trim();
-        part = part.slice(replyMatch[0].length).trim();
-        const quotedMsg = recentMsgs.find(m => m.id === quotedId);
-        if (quotedMsg) {
-          replyToData = {
-            id: quotedMsg.id,
-            sender: quotedMsg.sender,
-            content: quotedMsg.content.slice(0, 200),
-          };
-        }
+    let replyToData = null;
+    const replyMatch = content.match(/^\[REPLY:#([^\]]+)\]\s*/i);
+    if (replyMatch) {
+      const quotedId = replyMatch[1].trim();
+      content = content.slice(replyMatch[0].length).trim();
+      const quotedMsg = recentMsgs.find(m => m.id === quotedId);
+      if (quotedMsg) {
+        replyToData = {
+          id: quotedMsg.id,
+          sender: quotedMsg.sender,
+          content: quotedMsg.content.slice(0, 200),
+        };
       }
-
-      if (!part) continue;
-      const msgId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      const msgData = {
-        sender: activeChar,
-        senderType: 'ai',
-        owner: config.username,
-        content: part,
-        timestamp: firebase.database.ServerValue.TIMESTAMP,
-      };
-      if (replyToData) msgData.replyTo = replyToData;
-      await messagesRef.child(msgId).set(msgData);
-      if (i < parts.length - 1) await new Promise(r => setTimeout(r, 50));
     }
+
+    if (!content) return;
+    const msgId = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const msgData = {
+      sender: activeChar,
+      senderType: 'ai',
+      owner: config.username,
+      content,
+      timestamp: firebase.database.ServerValue.TIMESTAMP,
+    };
+    if (replyToData) msgData.replyTo = replyToData;
+    await messagesRef.child(msgId).set(msgData);
   }
 
   async function processCompleteLine(line) {
     if (phase === 'DONE') return;
     const trimmed = line.trim();
 
-    // Match standalone tag: [Name] or 【Name】 on its own line
-    const tagMatch = trimmed.match(/^[\[【](.+?)[\]】]$/);
+    // 检查 [END]
+    if (/^\[END\]$/i.test(trimmed)) {
+      if (phase === 'IN_CONTENT') await flushCurrentBubble();
+      phase = 'DONE';
+      return;
+    }
+
+    // 匹配消息标签：[角色名的消息：内容]
+    const tagMatch = trimmed.match(/^\[(.+?)的消息[：:]\s*(.*?)\]?$/);
     if (tagMatch) {
       const name = tagMatch[1].trim();
-
-      if (name === 'END') {
-        if (phase === 'IN_CONTENT') await flushCurrentBubble();
-        phase = 'DONE';
-        return;
-      }
-
       if (ownCharNames.includes(name)) {
         if (phase === 'IN_CONTENT') await flushCurrentBubble();
         activeChar = name;
         phase = 'IN_CONTENT';
+        currentContent = tagMatch[2] || '';
         ensureTempBubble(name);
+        updateLiveBubble();
         return;
       }
     }
 
     if (phase === 'IN_CONTENT') {
-      currentContent += line + '\n';
+      currentContent += (currentContent ? '\n' : '') + line;
       updateLiveBubble();
     }
   }
@@ -3179,7 +3804,7 @@ async function sendGroupReply(config, char1, char2) {
     document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 
     const count = parseInt(config.contextMessageCount, 10) || 100;
-    const recentMsgs = await fetchRecentMessages(count);
+    recentMsgs = await fetchRecentMessages(count);
 
     const systemContent = buildGroupSystemPrompt(config);
     const history = convertHistoryGroup(recentMsgs, ownCharNames);
@@ -3193,12 +3818,17 @@ async function sendGroupReply(config, char1, char2) {
     }
 
     const chatUrl = getChatUrl(config.apiBaseUrl);
+    const tools = getToolsForChar(ownCharNames);
     const requestBody = {
       model: config.modelName || 'gpt-4o',
       stream: true,
       max_tokens: 2000,
       messages: apiMessages,
+      tools,
+      tool_choice: 'auto',
     };
+
+    let groupToolCallsAcc = [];
 
     const resp = await fetch(chatUrl, {
       method: 'POST',
@@ -3246,10 +3876,20 @@ async function sendGroupReply(config, char1, char2) {
         if (data === '[DONE]') break outer;
         try {
           const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (delta) {
-            await feedModelText(delta);
+          const delta = parsed.choices?.[0]?.delta;
+          if (delta?.content) {
+            await feedModelText(delta.content);
             if (phase === 'DONE') break outer;
+          }
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              if (tc.id) {
+                groupToolCallsAcc[tc.index] = { id: tc.id, name: tc.function?.name || '', arguments: '' };
+              }
+              if (tc.function?.arguments && groupToolCallsAcc[tc.index]) {
+                groupToolCallsAcc[tc.index].arguments += tc.function.arguments;
+              }
+            }
           }
         } catch {}
       }
@@ -3265,6 +3905,12 @@ async function sendGroupReply(config, char1, char2) {
     // Auto-flush if model forgot [END]
     if (phase === 'IN_CONTENT') {
       await flushCurrentBubble();
+    }
+
+    // Execute any tool calls
+    const collectedToolCalls = groupToolCallsAcc.filter(Boolean);
+    if (collectedToolCalls.length > 0) {
+      await executeToolCalls(collectedToolCalls, config.roomId);
     }
 
   } catch (e) {
@@ -3673,6 +4319,56 @@ document.getElementById('btn-export-chat').addEventListener('click', () => {
 
 document.getElementById('btn-generate-summary').addEventListener('click', generateSummary);
 document.getElementById('btn-clear-chat').addEventListener('click', clearChat);
+
+// ===== Room name inline edit (TopBar) =====
+const roomLabelEl = document.getElementById('room-label');
+const roomNameInputEl = document.getElementById('room-name-input');
+
+roomLabelEl.addEventListener('click', () => {
+  if (!db) { showNotice('请先连接 Firebase', true); return; }
+  roomNameInputEl.value = roomMeta.roomName;
+  roomLabelEl.style.display = 'none';
+  roomNameInputEl.classList.add('active');
+  roomNameInputEl.focus();
+  roomNameInputEl.select();
+});
+
+async function commitRoomName() {
+  const newName = roomNameInputEl.value.trim().slice(0, 20);
+  roomNameInputEl.classList.remove('active');
+  roomLabelEl.style.display = '';
+  const config = getConfig();
+  if (!config?.roomId || !db) return;
+  if (newName === roomMeta.roomName) return;
+  try {
+    await db.ref(`rooms/${config.roomId}/meta/roomName`).set(newName || null);
+  } catch (e) {
+    showNotice('群名保存失败: ' + e.message, true);
+  }
+}
+
+roomNameInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); roomNameInputEl.blur(); }
+  if (e.key === 'Escape') {
+    roomNameInputEl.classList.remove('active');
+    roomLabelEl.style.display = '';
+  }
+});
+roomNameInputEl.addEventListener('blur', commitRoomName);
+
+// Settings panel room name save button
+document.getElementById('btn-save-room-name').addEventListener('click', async () => {
+  if (!db) { showNotice('请先连接 Firebase', true); return; }
+  const config = getConfig();
+  if (!config?.roomId) { showNotice('请先填写房间 ID 并保存设置', true); return; }
+  const newName = document.getElementById('cfg-roomName').value.trim().slice(0, 20);
+  try {
+    await db.ref(`rooms/${config.roomId}/meta/roomName`).set(newName || null);
+    showNotice('群名已保存');
+  } catch (e) {
+    showNotice('群名保存失败: ' + e.message, true);
+  }
+});
 
 // ===== Auto-load on page open =====
 document.addEventListener('DOMContentLoaded', () => {
